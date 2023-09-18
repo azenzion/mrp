@@ -6,6 +6,8 @@ import time
 csv_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "draft_data_public.LTR.PremierDraft.csv")
 cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_cards.txt")
 
+# TODO: Better naming conventions for cache files
+
 debug = False
 
 # Magic numbers
@@ -64,9 +66,35 @@ class Card:
         self.gamesNotSeenWinrate = 0.0
         self.improvementWhenDrawn = 0.0
 
+        self.substitutes = []
+
     # Do sorts by name
     def __lt__(self, other):
         return self.name < other.name
+
+def getCardFromCardName(cardName, card_data):
+    for card in card_data:
+        if card.name == cardName:
+            return card
+
+    print("ERROR: Card not found in card_data")
+    print(f"Card: {cardName}")
+    exit(1)
+
+def getCardsFromPair(pair, card_data):
+    card1Name = pair.split(" & ")[0]
+    card2Name = pair.split(" & ")[1]
+
+    card1 = getCardFromCardName(card1Name, card_data)
+    card2 = getCardFromCardName(card2Name, card_data)
+
+    if not card1 or not card2:
+        print("ERROR: Card not found in card_data")
+        print(f"Card 1: {card1Name}")
+        print(f"Card 2: {card2Name}")
+        exit(1)
+
+    return card1, card2
 
 def parsePercentage(percentage):
     if percentage == "":
@@ -213,29 +241,23 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
             # Stop after 1000 drafts
             if len(drafts) > numDrafts:
                 break
+    
+    # Cache to disk
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", f"drafts.csv"), "w") as f:
+        csv_writer = csv.writer(f, delimiter=",")
+        csv_writer.writerow(["Expansion", "Event Type", "Draft ID", "Draft Time", "Rank", "Event Match Wins", "Event Match Losses", "Pack Number", "Pick Number", "Pick", "Pick Maindeck Rate", "Pick Sideboard In Rate", "Pack Cards", "Pool Cards"])
+        for draft in drafts:
+            for pick in draft.picks:
+                csv_writer.writerow([pick.expansion, pick.event_type, pick.draft_id, pick.draft_time, pick.rank, pick.event_match_wins, pick.event_match_losses, pick.pack_number, pick.pick_number, pick.pick, pick.pick_maindeck_rate, pick.pick_sideboard_in_rate, pick.pack_cards, pick.pool_cards])
+    
     return drafts
 
 def findInversionPairs(pairs, card_data):
     inversionPairs = {}
     # Narrow down to pairs where the card with the lower GIH winrate is picked more often
     for pair in pairs.keys():
-        card1Name = pair.split(" & ")[0]
-        card2Name = pair.split(" & ")[1]
+        card1, card2 = getCardsFromPair(pair, card_data)
 
-        card1 = None
-        card2 = None
-        for card in card_data:
-            if card.name == card1Name:
-                card1 = card
-            if card.name == card2Name:
-                card2 = card
-
-        if not card1 or not card2:
-            print("ERROR: Card not found")
-            print(f"Card 1: {card1Name}")
-            print(f"Card 2: {card2Name}")
-            break
-        
         card1PickRate = pairs[pair][0]
         card2PickRate = pairs[pair][1]
 
@@ -262,6 +284,7 @@ def findInversionPairs(pairs, card_data):
 
 def getCardData():
     card_data = []
+
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "ltr-card-ratings-2023-09-17.csv"), "r") as f:
         csv_reader = csv.reader(f, delimiter=",")
 
@@ -307,6 +330,7 @@ def getCardData():
     return card_data
 
 def getPairs(card_data):
+    pairs = {}
     for colour in COLOURS:
         for card in card_data:
             if card.colour == colour:
@@ -346,7 +370,8 @@ with open(cardlist_file_path, "r") as f:
     for line in f:
         ltr_cards.append(line.strip())
 
-drafts = parseDrafts(csv_file_path, ltr_cards, 1000000)
+
+#drafts = parseDrafts(csv_file_path, ltr_cards, 100000)
 
 card_data = getCardData()
 
@@ -377,12 +402,79 @@ with open(os.path.join(os.path.dirname(__file__), "..", "data", "inversion_pairs
         pairName = row[0] + " & " + row[1]
         inversionPairs[pairName] = [float(row[2]), float(row[3]), float(row[4]), float(row[5])]
 
-# Print the pairs sorted by pick rate
-sortedPairs = sorted(pairs.items(), key=lambda x: x[1][0], reverse=True)
+# Eliminate every pair where there's a GIH winrate of 0
+validPairs = {}
+for pair in pairs.keys():
+    card1, card2 = getCardsFromPair(pair, card_data)
+    if pairs[pair][0] == 0.0 or pairs[pair][1] == 0.0:
+        print (f"Eliminating {pair} because one of them had a 0 pick rate in the data")
+        continue
+    elif card1.gameInHandWinrate == 0.0 or card2.gameInHandWinrate == 0.0:
+        print (f"Eliminating {pair} because one of them had a 0 GIH winrate in the data")
+        continue
+    else:
+        validPairs[pair] = pairs[pair]
 
+
+# For each pair, caclulate the absolute difference in pick rate
+for pair in validPairs.keys():
+    card1, card2 = getCardsFromPair(pair, card_data)
+
+    card1PickRate = pairs[pair][0]
+    card2PickRate = pairs[pair][1]
+   
+    # Calculate the absolute difference in pick rate
+    absDiff = abs(card1PickRate - card2PickRate)
+
+    # Store the absolute difference in the pair
+    validPairs[pair] = [card1PickRate, card2PickRate, absDiff]
+
+# Sort the pairs by absolute difference in pick rate
+sortedPairs = sorted(validPairs.items(), key=lambda x: x[1][2], reverse=True)
+
+# Print the sorted pairs
 for pair in sortedPairs:
-    print(f"{pair[0]}: {pair[1][0]} {pair[1][1]}")
+    print(f"{pair[0]}: {pair[1][0]} {pair[1][1]} {pair[1][2]}")
 
+
+# For each card, compute the substitutes
+# We define these as cards where, when players have to choose between the two cards,
+# The absolute difference in pick rate is less than 5%
+for pair in sortedPairs:
+    card1, card2 = getCardsFromPair(pair[0], card_data)
+    if pair[1][2] < 0.05:
+        print(f"Adding {card1.name} and {card2.name} as substitutes. pickrates: {pair[1][0]} {pair[1][1]}")
+        card1.substitutes.append(card2)
+        card2.substitutes.append(card1)
+
+
+# Order cards by number of substitutes
+cardSubstitutes = {}
+for card in card_data:
+    cardSubstitutes[card.name] = len(card.substitutes)
+
+# Sort the cards by number of substitutes
+sortedSubstitutes = sorted(cardSubstitutes.items(), key=lambda x: x[1], reverse=True)
+
+# Eliminate cards with no substitutes
+cardsWithSubstitutes = {}
+for cardName in sortedSubstitutes:
+    card = getCardFromCardName(cardName[0], card_data)
+    if len(card.substitutes) > 0:
+        cardsWithSubstitutes[cardName[0]] = cardName[1]
+
+
+
+# Print the sorted cards
+for cardName in sortedSubstitutes:
+
+    if cardName[1] == 0:
+        continue
+
+    card = getCardFromCardName(cardName[0], card_data)
+    print(f"{cardName[0]}: {cardName[1]}")
+    for substitute in card.substitutes:
+        print(f"    {substitute.name}")
 
 
 # Print the time that script took to run
