@@ -2,6 +2,7 @@
 import os
 import csv
 import time
+from filecache import filecache
 
 csv_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "draft_data_public.LTR.PremierDraft.csv")
 cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_cards.txt")
@@ -15,9 +16,9 @@ COLOURS = ['W', 'U', 'B', 'R', 'G']
 NUM_HEADERS = 12
 END_OF_PACK = 277
 END_OF_POOL = 2 * END_OF_PACK - NUM_HEADERS - 1
-# Dawn of a new hope is at the end for some reason
-DAWN_OF_A_NEW_HOPE_PACK = END_OF_POOL + 1
-DAWN_OF_A_NEW_HOPE_POOL = END_OF_POOL + 2
+# Dawn of a new age is at the end for some reason
+DAWN_OF_A_NEW_AGE_PACK = END_OF_POOL + 1
+DAWN_OF_A_NEW_AGE_POOL = END_OF_POOL + 2
 
 class Draft:
 
@@ -67,15 +68,16 @@ class Card:
         self.improvementWhenDrawn = 0.0
 
         self.substitutes = []
+        self.timesSeen = 0
+        self.timesPicked = 0
 
     # Do sorts by name
     def __lt__(self, other):
         return self.name < other.name
 
 def getCardFromCardName(cardName, card_data):
-    for card in card_data:
-        if card.name == cardName:
-            return card
+    if cardName in card_data:
+        return card_data[cardName]
 
     print("ERROR: Card not found in card_data")
     print(f"Card: {cardName}")
@@ -207,10 +209,10 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
                     pick.pool_cards.append(ltr_cards[i - END_OF_PACK])
 
             # Dawn of a new hope
-            if row[DAWN_OF_A_NEW_HOPE_PACK] == "1":
-                pick.pack_cards.append("Dawn of a New Hope")
-            if row[DAWN_OF_A_NEW_HOPE_POOL] == "1":
-                pick.pool_cards.append("Dawn of a New Hope")
+            if row[DAWN_OF_A_NEW_AGE_PACK] == "1":
+                pick.pack_cards.append("Dawn of a New Age")
+            if row[DAWN_OF_A_NEW_AGE_POOL] == "1":
+                pick.pool_cards.append("Dawn of a New Age")
 
             if debug:
                 print("PACK")
@@ -283,16 +285,13 @@ def findInversionPairs(pairs, card_data):
     return inversionPairs
 
 def getCardData():
-    card_data = []
+    card_data = {}
 
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "ltr-card-ratings-2023-09-17.csv"), "r") as f:
         csv_reader = csv.reader(f, delimiter=",")
 
         header_row = next(csv_reader)
         print(header_row)
-
-        next(csv_reader)
-
 
         # Winrates are in the form "50.5%"
         # Remove the % and convert to float
@@ -326,15 +325,16 @@ def getCardData():
             # These are like "5.5pp"
             nextCard.improvementWhenDrawn = parsePercentage(row[17])
 
-            card_data.append(nextCard)
+            card_data[nextCard.name] = nextCard
+
     return card_data
 
 def getPairs(card_data):
     pairs = {}
     for colour in COLOURS:
-        for card in card_data:
+        for card in card_data.values():
             if card.colour == colour:
-                for otherCard in card_data:
+                for otherCard in card_data.values():
                     if otherCard.colour == colour:
                         if card != otherCard:
                             pair = [card, otherCard]
@@ -362,6 +362,23 @@ def computePairPickRates(pairs, drafts):
         for pair in sortedPairs:
             csv_writer.writerow([pair[0].split(" & ")[0], pair[0].split(" & ")[1], pair[1][0], pair[1][1]])
 
+def computeConditionalPickRate(poolCard, packCard, drafts):
+    timesSeenWhileInPool = 0
+    timesPickedWhileInPool = 0
+
+    # Look for drafts where a player saw card2 while card1 was in their pool
+    for draft in drafts:
+        for pick in draft.picks:
+            if poolCard in pick.pool_cards and packCard in pick.pack_cards:
+                timesSeenWhileInPool += 1
+                if pick.pick == packCard:
+                    timesPickedWhileInPool += 1
+
+    if timesSeenWhileInPool == 0:
+        return 0.0
+    print (f"Pick rate of {packCard} while {poolCard} was in the pool: {timesPickedWhileInPool / timesSeenWhileInPool}")
+    return timesPickedWhileInPool / timesSeenWhileInPool
+
 # Create initial timestamp
 timestamp = time.time()
 
@@ -370,12 +387,30 @@ with open(cardlist_file_path, "r") as f:
     for line in f:
         ltr_cards.append(line.strip())
 
+drafts = []
+drafts = parseDrafts(csv_file_path, ltr_cards, 10000)
 
-#drafts = parseDrafts(csv_file_path, ltr_cards, 100000)
-
+card_data = {}
 card_data = getCardData()
 
-# For pairs of cards, compute the likelihood that a player will pick one over the other
+# Compute the pick rate for each card
+for draft in drafts:
+    for pick in draft.picks:
+        for card in pick.pack_cards:
+            cardName = card
+            card_data[cardName].timesSeen += 1
+
+            # If the card was picked, increment the number of times it was picked
+            if card == pick.pick:
+                card_data[cardName].timesPicked += 1
+
+computeConditionalPickRate("Smite the Deathless", "Improvised Club", drafts)
+
+# Print the unconditional pick rate of Improvised Club
+print(f"Improvised Club: {card_data['Improvised Club'].timesPicked / card_data['Improvised Club'].timesSeen}")
+
+exit()
+
 
 # For each colour, generate a list of pairs
 # Order doesn't matter
@@ -450,7 +485,7 @@ for pair in sortedPairs:
 
 # Order cards by number of substitutes
 cardSubstitutes = {}
-for card in card_data:
+for card in card_data.values():
     cardSubstitutes[card.name] = len(card.substitutes)
 
 # Sort the cards by number of substitutes
