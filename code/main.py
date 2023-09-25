@@ -3,6 +3,7 @@ import os
 import csv
 import time
 from filecache import filecache
+from statistics import mean
 
 csv_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "draft_data_public.LTR.PremierDraft.csv")
 cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_cards.txt")
@@ -11,7 +12,7 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_
 
 debug = False
 
-num_drafts = 100000
+num_drafts = 1000
 
 # Magic numbers
 COLOURS = ['W', 'U', 'B', 'R', 'G']
@@ -99,6 +100,16 @@ def getCardsFromPair(pair, card_data):
         exit(1)
 
     return card1, card2
+
+def readInversionPairsFromCache():
+    inversionPairs = {}
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", "inversion_pairs.csv"), "r") as f:
+        csv_reader = csv.reader(f, delimiter=",")
+        next(csv_reader)
+        for row in csv_reader:
+            pairName = row[0] + " & " + row[1]
+            inversionPairs[pairName] = [float(row[2]), float(row[3]), float(row[4]), float(row[5])]
+    return inversionPairs
 
 def parsePercentage(percentage):
     if percentage == "":
@@ -333,22 +344,20 @@ def getCardData():
 
     return card_data
 
+# Returns a list of tuples
 def getPairs(card_data):
-    pairs = {}
+    pairs = []
     for colour in COLOURS:
         for card in card_data.values():
             if card.colour == colour:
                 for otherCard in card_data.values():
                     if otherCard.colour == colour:
                         if card != otherCard:
-                            pair = [card, otherCard]
-                            pair.sort()
-                            pairName = pair[0].name + " & " + pair[1].name
-                            if pairName not in pairs.keys():
-                                pairs[pairName] = 0
+                            pair = (card, otherCard)
+                            pairs.append(pair)
 
     # Print the number of pairs
-    print(f"Number of pairs: {len(pairs.keys())}")  
+    print(f"Number of pairs: {len(pairs)}")  
     return pairs
 
 # Compute the pick rate for each card
@@ -402,7 +411,8 @@ def pickRateColour(packCardName, drafts, num_cards=1):
         print(f"Number of times {card1} while at least {num_cards} {cardColour} cards in pool: " + str(timesSeenWithColour))
         print(f"Number of times {card1} picked while at least {num_cards} {cardColour} cards in pool: " + str(timesPickedWithColour))
     
-    print (f"Pick rate of {packCardName} with {num_cards} other {cardColour} cards in the pool: {timesPickedWithColour / timesSeenWithColour}")
+        print (f"Pick rate of {packCardName} with {num_cards} other {cardColour} cards in the pool: {timesPickedWithColour / timesSeenWithColour}")
+
     return timesPickedWithColour / timesSeenWithColour
 
 # Conditional pick rate, how many times was card2 picked when card1 was in the pool
@@ -427,8 +437,8 @@ def computeConditionalPickRate(poolCard, packCard, drafts, num_pool_card=1):
                     numPoolCards += 1
                 
                 # Also count packCard as a substitute for itself
-                if poolCardName == packCard:
-                    numPoolCards += 1
+                #if poolCardName == packCard:
+                #    numPoolCards += 1
 
                 
             if numPoolCards >= num_pool_card:
@@ -447,13 +457,13 @@ def computeConditionalPickRate(poolCard, packCard, drafts, num_pool_card=1):
                     picksNotChoosingPackCard.append(pick)
 
     if timesSeenWhileInPool == 0:
-        print("Could not find any picks with " + card2 + " in the pack and " + str(num_pool_card) + " " + card1 + " in the pool")
+        if debug:
+            print("Could not find any picks with " + packCard + " in the pack and " + str(num_pool_card) + " " + poolCard + " in the pool")
         return 0.0
     
-    debug = True
     if debug == True:
-        print(f"Number of times {card2} seen while {num_pool_card} {card1} in pool: " + str(timesSeenWhileInPool))
-        print(f"Number of times {card2} picked while {num_pool_card} {card1} in pool: " + str(timesPickedWhileInPool))
+        print(f"Number of times {packCard} seen while {num_pool_card} {poolCard} in pool: " + str(timesSeenWhileInPool))
+        print(f"Number of times {packCard} picked while {num_pool_card} {poolCard} in pool: " + str(timesPickedWhileInPool))
 
         # Print the picks where the player didn't pick card2
         """
@@ -466,7 +476,7 @@ def computeConditionalPickRate(poolCard, packCard, drafts, num_pool_card=1):
             
 
 
-    print (f"Pick rate of {packCard} while at least {num_pool_card} {poolCard} was in the pool: {timesPickedWhileInPool / timesSeenWhileInPool}")
+        print (f"Pick rate of {packCard} while at least {num_pool_card} {poolCard} was in the pool: {timesPickedWhileInPool / timesSeenWhileInPool}")
     return timesPickedWhileInPool / timesSeenWhileInPool
 
 
@@ -477,8 +487,11 @@ def elasticitySubstitution(card1, card2, drafts):
     for i in range(1, 20):
         card1ColourPickRate = pickRateColour(card1, drafts, i)
         colourConditionalPickRates.append(card1ColourPickRate)
+
+    # Remove 0s and 1s from the list
+    colourConditionalPickRates = [x for x in colourConditionalPickRates if x != 0.0 and x != 1.0]
     
-    card1ColourPickRate = max(colourConditionalPickRates)
+    card1ColourPickRate = mean(colourConditionalPickRates)
     #card2ColourPickRate = pickRateColour(card2, drafts)
 
     # Compute the card conditional pick rate
@@ -486,7 +499,13 @@ def elasticitySubstitution(card1, card2, drafts):
     for i in range(1, 20):
         card1ConditionalPickRate = computeConditionalPickRate(card2, card1, drafts, i)
         cardConditionalPickrates.append(card1ConditionalPickRate)
-    card1ConditionalPickRate = max(cardConditionalPickrates)
+
+    # Remove 0s and 1s from the list
+    cardConditionalPickrates = [x for x in cardConditionalPickrates if x != 0.0 and x != 1.0]
+    if len(cardConditionalPickrates) == 0:
+        print(f"Could not compute conditional pick rate for {card1} and {card2}")
+        return None
+    card1ConditionalPickRate = mean(cardConditionalPickrates)
     #card2ConditionalPickRate = computeConditionalPickRate(card1, card2, drafts)
 
     # Compute the elasticity of substitution
@@ -502,10 +521,13 @@ def elasticitySubstitution(card1, card2, drafts):
     return elasticity
 
 
-def computeDraftStats(cardName1, cardName2, drafts):
+def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_card=1):
 
     card1 = getCardFromCardName(cardName1, card_data)
     card2 = getCardFromCardName(cardName2, card_data)
+
+    card1Colour = card1.colour
+    card2Colour = card2.colour
 
     card1Seen = 0
     card2Seen = 0
@@ -520,8 +542,20 @@ def computeDraftStats(cardName1, cardName2, drafts):
     picksWhereCard1Picked = []
     picksWhereCard2Picked = []
 
+     # Colour pick rate analysis
+    card1SeenWithColour = {}
+    card1PickedWithColour = {}
+
+    card2SeenWithColour = {}
+    card2PickedWithColour = {}
+
     for draft in drafts:
         for pick in draft.picks:
+
+            # Populate with 0 values
+            for i in range(30):
+                card1SeenWithColour[i] = 0
+                card1PickedWithColour[i] = 0
 
             # Pack analysis
             # Count the number of times each card was seen
@@ -552,20 +586,37 @@ def computeDraftStats(cardName1, cardName2, drafts):
             # Pool analysis
             card1InPool = 0
             card2InPool = 0
-            coloursInPool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0}
+            coloursInPool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
             for poolCardName in pick.pool_cards:
-                if poolCardName == cardName1:
-                    card1InPool += 1
-                if poolCardName == cardName2:
-                    card2InPool += 1
                 poolCardColour = getCardFromCardName(poolCardName, card_data).colour
                 coloursInPool[poolCardColour] += 1
+
+            # Calculate number of times card 1 was picked with n cards of same colour in pool
+            # for n = 0 to 29
+            for i in range(30):
+                if coloursInPool[card1Colour] >= i:
+                    card1SeenWithColour[i] += 1
+                    if cardName1 == pick.pick:
+                        card1PickedWithColour[i] += 1
+            # Do the same for card 2
+            for i in range(30):
+                if coloursInPool[card2Colour] >= i:
+                    card2SeenWithColour[i] += 1
+                    if cardName2 == pick.pick:
+                        card2PickedWithColour[i] += 1
+
+            # Calculate the number of times card 1 was picked with n copies of card 2 in the pool
+            # for n = 0 to 29
+            for i in range(30):
                 
+
+    card_data[cardName1].seenWithColour = card1SeenWithColour
+    card_data[cardName1].pickedWithColour = card1PickedWithColour
+
+    card_data[cardName2].seenWithColour = card2SeenWithColour
+    card_data[cardName2].pickedWithColour = card2PickedWithColour
+
                 
-
-            
-
-
 
 
 # for picks where poth cards were present
@@ -573,12 +624,11 @@ def computeDraftStats(cardName1, cardName2, drafts):
 # and the rate at which card 2 was picked
 # should sum to 1
 def computePairPickRates(pairs, drafts):
+    pairsWithPickRates = {}
     # Compute the pairwise pick rate for each pair
-    for pair in pairs.keys():
-        card1 = pair.split(" & ")[0]
-        card2 = pair.split(" & ")[1]
+    for card1, card2 in pairs:
         pickRate = countSubstitutes(drafts, card1, card2)
-        pairs[pair] = pickRate
+        pairsWithPickRates[card1, card2] = pickRate
 
     # Cache the pairs with their pick rates
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "pick_rates.csv"), "w") as f:
@@ -586,6 +636,8 @@ def computePairPickRates(pairs, drafts):
         csv_writer.writerow(["Card 1", "Card 2", "Card 1 Pick Rate", "Card 2 Pick Rate"])
         for pair in sortedPairs:
             csv_writer.writerow([pair[0].split(" & ")[0], pair[0].split(" & ")[1], pair[1][0], pair[1][1]])
+
+    return pairsWithPickRates
 
 
 # Create initial timestamp
@@ -604,24 +656,15 @@ card_data = getCardData()
 
 #card_data = computePickRates(drafts, card_data)
 
-# Compute Elasticity of substitution
-card1 = "Smite the Deathless"
-card2 = "Improvised Club"
-es = elasticitySubstitution(card1, card2, drafts)
-
-
-
-
-exit()
-
-
 # For each colour, generate a list of pairs
 # Order doesn't matter
-pairs = getPairs(card_data)
+#pairs = getPairs(card_data)
 
-#pairs = computePairPickRates(drafts, pairs)
+#pairs = computePairPickRates(pairs, drafts)
 
 #inversionPairs = findInversionPairs(pairs, card_data)
+
+pairs = {}
 
 # Read in the pair pick rates from the cache
 with open(os.path.join(os.path.dirname(__file__), "..", "data", "pick_rates.csv"), "r") as f:
@@ -632,13 +675,8 @@ with open(os.path.join(os.path.dirname(__file__), "..", "data", "pick_rates.csv"
         pairs[pairName] = [float(row[2]), float(row[3])]
 
 # Read in the inversion pairs from the cache
-inversionPairs = {}
-with open(os.path.join(os.path.dirname(__file__), "..", "data", "inversion_pairs.csv"), "r") as f:
-    csv_reader = csv.reader(f, delimiter=",")
-    next(csv_reader)
-    for row in csv_reader:
-        pairName = row[0] + " & " + row[1]
-        inversionPairs[pairName] = [float(row[2]), float(row[3]), float(row[4]), float(row[5])]
+#inversionPairs = readInversionPairsFromCache()
+
 
 # Eliminate every pair where there's a GIH winrate of 0
 validPairs = {}
@@ -702,7 +740,6 @@ for cardName in sortedSubstitutes:
         cardsWithSubstitutes[cardName[0]] = cardName[1]
 
 
-
 # Print the sorted cards
 for cardName in sortedSubstitutes:
 
@@ -713,6 +750,34 @@ for cardName in sortedSubstitutes:
     print(f"{cardName[0]}: {cardName[1]}")
     for substitute in card.substitutes:
         print(f"    {substitute.name}")
+
+
+substituteElasticities = []
+# Compute the elasticity of substitution for each pair
+for cardName in sortedSubstitutes:
+    if cardName[1] == 0:
+        continue
+
+    card = getCardFromCardName(cardName[0], card_data)
+    for substitute in card.substitutes:
+        e = elasticitySubstitution(card.name, substitute.name, drafts)
+
+        if e:
+            substituteElasticities.append(e)
+
+# Compute the elasticisty of substitution for all pairs
+
+generalElasticities = []
+for pair in sortedPairs:
+    card1, card2 = getCardsFromPair(pair[0], card_data)
+    e = elasticitySubstitution(card1.name, card2.name, drafts)
+
+    if e:
+        generalElasticities.append(e)
+
+print(f"Mean elasticity among substitutes: {mean(substituteElasticities)}")
+print(f"Mean elasticity among all pairs: {mean(generalElasticities)}")
+
 
 
 # Print the time that script took to run
