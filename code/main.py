@@ -542,12 +542,19 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
     picksWhereCard1Picked = []
     picksWhereCard2Picked = []
 
-     # Colour pick rate analysis
+    # Colour pick rate analysis
     card1SeenWithColour = {}
     card1PickedWithColour = {}
 
     card2SeenWithColour = {}
     card2PickedWithColour = {}
+
+    # Conditional card pick rate analysis
+    card1SeenWithCard2 = {}
+    card1PickedWithCard2 = {}
+
+    card2SeenWithCard1 = {}
+    card2PickedWithCard1 = {}
 
     for draft in drafts:
         for pick in draft.picks:
@@ -590,6 +597,10 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
             for poolCardName in pick.pool_cards:
                 poolCardColour = getCardFromCardName(poolCardName, card_data).colour
                 coloursInPool[poolCardColour] += 1
+                if poolCardName == cardName1:
+                    card1InPool += 1
+                if poolCardName == cardName2:
+                    card2InPool += 1
 
             # Calculate number of times card 1 was picked with n cards of same colour in pool
             # for n = 0 to 29
@@ -608,13 +619,40 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
             # Calculate the number of times card 1 was picked with n copies of card 2 in the pool
             # for n = 0 to 29
             for i in range(30):
-                
+                if card2InPool >= i:
+                    card1SeenWithCard2[i] += 1
+                    if cardName1 == pick.pick:
+                        card1PickedWithCard2[i] += 1
 
+            # Do the same for card 2
+            for i in range(30):
+                if card1InPool >= i:
+                    card2SeenWithCard1[i] += 1
+                    if cardName2 == pick.pick:
+                        card2PickedWithCard1[i] += 1
+
+    # Set dictionary of card seen with x cards of same colour in pool
     card_data[cardName1].seenWithColour = card1SeenWithColour
     card_data[cardName1].pickedWithColour = card1PickedWithColour
 
     card_data[cardName2].seenWithColour = card2SeenWithColour
     card_data[cardName2].pickedWithColour = card2PickedWithColour
+
+    # Set dictionary of card seen with x copies of card 2 in pool
+    card_data[cardName1].seenWithCard = card1SeenWithCard2
+    card_data[cardName1].pickedWithCard = card1PickedWithCard2
+
+    # Set dictionary of card seen with x copies of card 1 in pool
+    card_data[cardName2].seenWithCard = card2SeenWithCard1
+    card_data[cardName2].pickedWithCard = card2PickedWithCard1
+
+    # Set overall pick rate for each card
+    card_data[cardName1].pickRate = card1Picked / card1Seen
+    card_data[cardName2].pickRate = card2Picked / card2Seen
+
+    # Set the pairwise pick rate for the cards
+    card_data[cardName1].pairwisePickRate[card2] = card1PickedOverCard2 / bothCardsSeen
+    card_data[cardName2].pairwisePickRate[card1] = card2PickedOverCard1 / bothCardsSeen
 
                 
 
