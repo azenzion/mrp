@@ -11,6 +11,8 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_
 
 debug = False
 
+num_drafts = 100000
+
 # Magic numbers
 COLOURS = ['W', 'U', 'B', 'R', 'G']
 NUM_HEADERS = 12
@@ -205,7 +207,8 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
         
             # Parse the pool
             for i in range(END_OF_PACK, END_OF_POOL):
-                if row[i] == "1":
+                num_card_in_pool = row[i]
+                for k in range(int(num_card_in_pool)):
                     pick.pool_cards.append(ltr_cards[i - END_OF_PACK])
 
             # Dawn of a new hope
@@ -240,7 +243,7 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
                 current_draft = draft
                 current_draft.picks.append(pick)
 
-            # Stop after 1000 drafts
+            # Stop after num_drafts drafts
             if len(drafts) > numDrafts:
                 break
     
@@ -291,7 +294,8 @@ def getCardData():
         csv_reader = csv.reader(f, delimiter=",")
 
         header_row = next(csv_reader)
-        print(header_row)
+        if debug:
+            print(header_row)
 
         # Winrates are in the form "50.5%"
         # Remove the % and convert to float
@@ -347,6 +351,227 @@ def getPairs(card_data):
     print(f"Number of pairs: {len(pairs.keys())}")  
     return pairs
 
+# Compute the pick rate for each card
+def computePickRates(drafts, card_data):
+    for draft in drafts:
+        for pick in draft.picks:
+            for card in pick.pack_cards:
+                cardName = card
+                card_data[cardName].timesSeen += 1
+
+                # If the card was picked, increment the number of times it was picked
+                if card == pick.pick:
+                    card_data[cardName].timesPicked += 1
+    return card_data
+
+# Compute the pick rate of a card conditioned on having one other card of the same colour in the pool
+def pickRateColour(packCardName, drafts, num_cards=1):
+    timesSeenWithColour = 0
+    timesPickedWithColour = 0
+
+    packCard = getCardFromCardName(packCardName, card_data)
+    cardColour = packCard.colour
+
+    for draft in drafts:
+        for pick in draft.picks:
+            if packCardName not in pick.pack_cards:
+                continue
+
+            if packCardName in pick.pack_cards:
+                num_colour_cards = 0
+                for poolCardName in pick.pool_cards:
+                    poolCardData = getCardFromCardName(poolCardName, card_data)
+                    poolCardColour = poolCardData.colour
+                    if poolCardColour == cardColour:
+                        num_colour_cards += 1
+                        
+                #print(f"Found {num_colour_cards} {cardColour} cards in the pool")
+                if num_colour_cards >= num_cards:
+                    #print(f'Counting as seen')
+                    timesSeenWithColour += 1
+                    #print(f"Card picked was {pick.pick}")
+                    if pick.pick == packCardName:
+                            #print(f'Counting as picked')
+                            timesPickedWithColour += 1
+
+    if timesSeenWithColour == 0:
+        print(f"Could not find any drafts with {packCard} in the pack and {num_cards} other {cardColour} cards in the pool")
+        return 0.0
+    
+    if debug == True:
+        print(f"Number of times {card1} while at least {num_cards} {cardColour} cards in pool: " + str(timesSeenWithColour))
+        print(f"Number of times {card1} picked while at least {num_cards} {cardColour} cards in pool: " + str(timesPickedWithColour))
+    
+    print (f"Pick rate of {packCardName} with {num_cards} other {cardColour} cards in the pool: {timesPickedWithColour / timesSeenWithColour}")
+    return timesPickedWithColour / timesSeenWithColour
+
+# Conditional pick rate, how many times was card2 picked when card1 was in the pool
+# num_pool_card is the number of card1 that need to be in the pool
+def computeConditionalPickRate(poolCard, packCard, drafts, num_pool_card=1):
+    timesSeenWhileInPool = 0
+    timesPickedWhileInPool = 0
+
+    picksChoosingPackCard = []
+    picksNotChoosingPackCard = []
+
+    # Look for drafts where a player saw card2 while card1 was in their pool
+    for draft in drafts:
+        for pick in draft.picks:
+            if packCard not in pick.pack_cards:
+                continue
+
+            # Get the number of poolCard in the pool
+            numPoolCards = 0
+            for poolCardName in pick.pool_cards:
+                if poolCardName == poolCard:
+                    numPoolCards += 1
+                
+                # Also count packCard as a substitute for itself
+                if poolCardName == packCard:
+                    numPoolCards += 1
+
+                
+            if numPoolCards >= num_pool_card:
+                #print(f"Number of {card1} seen in the pool: {num_pool_card_seen}")
+                #print(f"Counting as saw {card2} while {card1} was in the pool")
+
+                timesSeenWhileInPool += 1
+
+                #print(f"Card picked was {pick.pick}")
+                
+                if pick.pick == packCard:
+                    #print(f"Counting as picked {card2} while {card1} was in the pool")
+                    timesPickedWhileInPool += 1
+                else:
+                    #print(f"Counting as did not pick {card2} while {card1} was in the pool")
+                    picksNotChoosingPackCard.append(pick)
+
+    if timesSeenWhileInPool == 0:
+        print("Could not find any picks with " + card2 + " in the pack and " + str(num_pool_card) + " " + card1 + " in the pool")
+        return 0.0
+    
+    debug = True
+    if debug == True:
+        print(f"Number of times {card2} seen while {num_pool_card} {card1} in pool: " + str(timesSeenWhileInPool))
+        print(f"Number of times {card2} picked while {num_pool_card} {card1} in pool: " + str(timesPickedWhileInPool))
+
+        # Print the picks where the player didn't pick card2
+        """
+        print(f"Picks where {card2} was not picked while {num_pool_card} {card1} were in the pool")
+        for pick in picksNotChoosingPackCard:
+            print(f"Pick: {pick.pick}")
+            print(f"Pack: {pick.pack_cards}")
+            print(f"Pool: {pick.pool_cards}")
+        """
+            
+
+
+    print (f"Pick rate of {packCard} while at least {num_pool_card} {poolCard} was in the pool: {timesPickedWhileInPool / timesSeenWhileInPool}")
+    return timesPickedWhileInPool / timesSeenWhileInPool
+
+
+def elasticitySubstitution(card1, card2, drafts):
+
+    # Compute the colour conditional pick rate for the cards
+    colourConditionalPickRates = []
+    for i in range(1, 20):
+        card1ColourPickRate = pickRateColour(card1, drafts, i)
+        colourConditionalPickRates.append(card1ColourPickRate)
+    
+    card1ColourPickRate = max(colourConditionalPickRates)
+    #card2ColourPickRate = pickRateColour(card2, drafts)
+
+    # Compute the card conditional pick rate
+    cardConditionalPickrates = []
+    for i in range(1, 20):
+        card1ConditionalPickRate = computeConditionalPickRate(card2, card1, drafts, i)
+        cardConditionalPickrates.append(card1ConditionalPickRate)
+    card1ConditionalPickRate = max(cardConditionalPickrates)
+    #card2ConditionalPickRate = computeConditionalPickRate(card1, card2, drafts)
+
+    # Compute the elasticity of substitution
+    #elasticity = (card1ConditionalPickRate - card1ColourPickRate) / (card2ConditionalPickRate - card2ColourPickRate)
+    elasticity = (card1ConditionalPickRate - card1ColourPickRate)
+
+    # Compute the elasticity for the other two
+    #elasticity2 = card2ConditionalPickRate - card2ColourPickRate    
+
+    print(f"Elasticity of substitution between {card1} and {card2}: {elasticity}")
+
+    #print(f"Elasticity of substitution between {card2} and {card1}: {elasticity2}")
+    return elasticity
+
+
+def computeDraftStats(cardName1, cardName2, drafts):
+
+    card1 = getCardFromCardName(cardName1, card_data)
+    card2 = getCardFromCardName(cardName2, card_data)
+
+    card1Seen = 0
+    card2Seen = 0
+    card1Picked = 0
+    card2Picked = 0
+
+    bothCardsSeen = 0
+    card1PickedOverCard2 = 0
+    card2PickedOverCard1 = 0
+    neitherCardPicked = 0
+
+    picksWhereCard1Picked = []
+    picksWhereCard2Picked = []
+
+    for draft in drafts:
+        for pick in draft.picks:
+
+            # Pack analysis
+            # Count the number of times each card was seen
+            # Count the number of times each card was picked
+            if cardName1 in pick.pack_cards:
+                card1Seen += 1
+                if cardName1 == pick.pick:
+                    card1Picked += 1
+                    picksWhereCard1Picked.append(pick)
+            
+            if cardName2 in pick.pack_cards:
+                card2Seen += 1
+                if cardName2 == pick.pick:
+                    card2Picked += 1
+                    picksWhereCard2Picked.append(pick)
+
+            # Both cards in the pack analysis
+            if cardName1 in pick.pack_cards and cardName2 in pick.pack_cards:
+                bothCardsSeen += 1
+                if cardName1 == pick.pick:
+                    card1PickedOverCard2 += 1
+                elif cardName2 == pick.pick:
+                    card2PickedOverCard1 += 1
+                else:
+                    neitherCardPicked += 1
+
+
+            # Pool analysis
+            card1InPool = 0
+            card2InPool = 0
+            coloursInPool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0}
+            for poolCardName in pick.pool_cards:
+                if poolCardName == cardName1:
+                    card1InPool += 1
+                if poolCardName == cardName2:
+                    card2InPool += 1
+                poolCardColour = getCardFromCardName(poolCardName, card_data).colour
+                coloursInPool[poolCardColour] += 1
+                
+                
+
+            
+
+
+
+
+# for picks where poth cards were present
+# compute the rate at which card 1 was picked
+# and the rate at which card 2 was picked
+# should sum to 1
 def computePairPickRates(pairs, drafts):
     # Compute the pairwise pick rate for each pair
     for pair in pairs.keys():
@@ -362,22 +587,6 @@ def computePairPickRates(pairs, drafts):
         for pair in sortedPairs:
             csv_writer.writerow([pair[0].split(" & ")[0], pair[0].split(" & ")[1], pair[1][0], pair[1][1]])
 
-def computeConditionalPickRate(poolCard, packCard, drafts):
-    timesSeenWhileInPool = 0
-    timesPickedWhileInPool = 0
-
-    # Look for drafts where a player saw card2 while card1 was in their pool
-    for draft in drafts:
-        for pick in draft.picks:
-            if poolCard in pick.pool_cards and packCard in pick.pack_cards:
-                timesSeenWhileInPool += 1
-                if pick.pick == packCard:
-                    timesPickedWhileInPool += 1
-
-    if timesSeenWhileInPool == 0:
-        return 0.0
-    print (f"Pick rate of {packCard} while {poolCard} was in the pool: {timesPickedWhileInPool / timesSeenWhileInPool}")
-    return timesPickedWhileInPool / timesSeenWhileInPool
 
 # Create initial timestamp
 timestamp = time.time()
@@ -388,26 +597,20 @@ with open(cardlist_file_path, "r") as f:
         ltr_cards.append(line.strip())
 
 drafts = []
-drafts = parseDrafts(csv_file_path, ltr_cards, 10000)
+drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
 
 card_data = {}
 card_data = getCardData()
 
-# Compute the pick rate for each card
-for draft in drafts:
-    for pick in draft.picks:
-        for card in pick.pack_cards:
-            cardName = card
-            card_data[cardName].timesSeen += 1
+#card_data = computePickRates(drafts, card_data)
 
-            # If the card was picked, increment the number of times it was picked
-            if card == pick.pick:
-                card_data[cardName].timesPicked += 1
+# Compute Elasticity of substitution
+card1 = "Smite the Deathless"
+card2 = "Improvised Club"
+es = elasticitySubstitution(card1, card2, drafts)
 
-computeConditionalPickRate("Smite the Deathless", "Improvised Club", drafts)
 
-# Print the unconditional pick rate of Improvised Club
-print(f"Improvised Club: {card_data['Improvised Club'].timesPicked / card_data['Improvised Club'].timesSeen}")
+
 
 exit()
 
