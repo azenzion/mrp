@@ -552,7 +552,7 @@ def elasticitySubstitution(card1, card2, drafts):
     #print(f"Elasticity of substitution between {card2} and {card1}: {elasticity2}")
     return elasticity
 
-def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_card=1):
+def computeDraftStats(cardName1, cardName2, drafts):
 
     card1 = getCardFromCardName(cardName1, card_data)
     card2 = getCardFromCardName(cardName2, card_data)
@@ -639,13 +639,23 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
     card_data[cardName1] = card1
     card_data[cardName2] = card2
 
-    # Set overall pick rate for each card
-    card_data[cardName1].pickRate = card1Picked / card1Seen
-    card_data[cardName2].pickRate = card2Picked / card2Seen
+    # Set any of these valuse to 0 if the denominator is 0
+    if card1Seen == 0:
+        card_data[cardName1].pickRate = 0.0
+    else:
+        card_data[cardName1].pickRate = card1Picked / card1Seen
+    if card2Seen == 0:
+        card_data[cardName2].pickRate = 0.0
+    else:
+        card_data[cardName2].pickRate = card2Picked / card2Seen
 
     # Set the pairwise pick rate for the cards
-    card_data[cardName1].pairwisePickRate[card2] = card1PickedOverCard2 / bothCardsSeen
-    card_data[cardName2].pairwisePickRate[card1] = card2PickedOverCard1 / bothCardsSeen
+    if bothCardsSeen == 0:
+        card_data[cardName1].pairwisePickRate[cardName2] = 0.0
+        card_data[cardName2].pairwisePickRate[cardName1] = 0.0
+    else:
+        card_data[cardName1].pairwisePickRate[card2] = card1PickedOverCard2 / bothCardsSeen
+        card_data[cardName2].pairwisePickRate[card1] = card2PickedOverCard1 / bothCardsSeen
 
     return card_data
                 
@@ -671,6 +681,98 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
+def regression(card1, card2, drafts, card_data):
+
+    card_data = computeDraftStats(card1, card2, drafts)
+
+    y = []
+    colours = []
+
+    card2InPool = {}
+
+    # Max number of card2 multiples to consider
+    num_multiples = 5
+    for i in range(0, num_multiples + 1):
+        card2InPool[i] = []
+
+
+    for pick in card_data[card1].picks:
+        if pick.pick == card1:
+            y.append(1)
+        else:
+            y.append(0)
+        
+        colours.append(pick.colourInPool)
+
+        numCard2 = pick.numCardInPool[card2]
+        
+        for i in card2InPool.keys():
+            if numCard2 == i:
+                card2InPool[i].append(1)
+            else:
+                card2InPool[i].append(0)
+
+    # Eliminate any number of card2 with less than 30 samples
+    tempCard2InPool = {}
+    for i in range(0, num_multiples + 1):
+        if sum(card2InPool[i]) < 100:
+            print(f"Eliminating {i} {card2} from the regression due to not enough samples")
+            num_multiples -= 1
+        else:
+            tempCard2InPool[i] = card2InPool[i]
+    card2InPool = tempCard2InPool
+
+    # Do a regression of Y on:
+    # colours
+    # an indicator variable for x = 0 to num_multiples, indicating whethere there are that many card2 in the pack
+
+    endog = np.array(y)
+
+    # Assemble exog matrix
+
+    # maybe control for number of same colour cards in pack but seems not to matter
+    # This lets us differentiate between drafts where you have 0 card1 because:
+    # - You are not in a deck that can play card1
+    # vs
+    # - You are in a deck that can play card1 but you didn't see any
+    # exog = np.array(colours)
+
+    exog = np.array(card2InPool[0])
+    for i in range(1, num_multiples + 1):
+        exog = np.column_stack((exog, card2InPool[i]))
+
+    # Add a constant term
+    # This accounts for the unconditional probability of picking card1
+    exog = sm.add_constant(exog)
+
+    model = sm.OLS(endog, exog)
+
+    results = model.fit()
+
+    # If there's multicollinearity, the condition number will be high
+    print(f"Condition number: {results.condition_number}")
+
+    #print(results.summary())
+
+    # A card is said to be a substitute if the coefficient on number of cards is negative for n>=1
+    # and the coefficient on number of cards is positive for n=0
+    debug = True
+    if debug:
+        # Print the coefficients
+        print(f"Effects of {card2} in pool on picking {card1}")
+        for i in range(0, num_multiples + 1):
+            print(f"{i}: {results.params[i + 1]}")
+
+    # If all the params for nonzero amounts of card2 are negative, then card2 is a substitute for card1
+    if all(i < 0 for i in results.params[1:]):
+        print(f"{card2} is a substitute for {card1}")
+    else:
+        print(f"{card2} is not a substitute for {card1}")
+
+    return(all(i < 0 for i in results.params[1:]))
+
+    
+
 
 # Create initial timestamp
 timestamp = time.time()
@@ -687,52 +789,45 @@ card_data = {}
 card_data = getCardData()
 
 
-# Compute draft stats
-card1 = "Improvised Club"
-card2 = "Smite the Deathless"
-card_data = computeDraftStats(card1, card2, drafts)
+# Generate all the pairs of red cards
+redCards = []
+for card in card_data.values():
+    if card.colour == "R":
+        redCards.append(card.name)
 
-y = []
-colours = []
+# Compute the number of pairs
+numPairs = len(redCards) * (len(redCards) - 1) / 2
+print(f"Number of pairs: {numPairs}")
 
-card2InPool = {}
+# Compute the number of pairs where card2 is a substitute for card1
+numSubstitutes = 0
+for i in range(0, len(redCards)):
+    for j in range(i + 1, len(redCards)):
+        card1 = redCards[i]
+        card2 = redCards[j]
+        if regression(card1, card2, drafts, card_data):
+            numSubstitutes += 1
+            card1 = getCardFromCardName(card1, card_data)
+            card1.substitutes.append(card2)
 
-# Max number of card2 multiples to consider
-num_multiples = 5
-for i in range(0, num_multiples + 1):
-    card2InPool[i] = []
+print(f"Number of substitutes: {numSubstitutes}")
 
+# Sort the red cards by number of substitutes
+redCardSubstitutes = {}
+for card in card_data.values():
+    if card.colour == "R":
+        redCardSubstitutes[card.name] = len(card.substitutes)
 
-for pick in card_data[card1].picks:
-    if pick.pick == card1:
-        y.append(1)
-    else:
-        y.append(0)
-    
-    colours.append(pick.colourInPool)
+# Sort the cards by number of substitutes
+sortedSubstitutes = sorted(redCardSubstitutes.items(), key=lambda x: x[1], reverse=True)
 
-    numCard2 = pick.numCardInPool[card2]
-    
-    for i in card2InPool.keys():
-        if numCard2 == i:
-            card2InPool[i].append(1)
-        else:
-            card2InPool[i].append(0)
+# Print each card, its number of substitutes, and its substitutes
+for cardName in sortedSubstitutes:
+    card = getCardFromCardName(cardName[0], card_data)
+    print(f"{cardName[0]}: {cardName[1]}")
+    for substitute in card.substitutes:
+        print(f"    {substitute.name}")
 
-# Do a regression of Y on:
-# colours
-# an indicator variable for x = 0 to num_multiples, indicating whethere there are that many card2 in the pack
-model = sm.OLS(y, card2InPool[0], card2InPool[1], card2InPool[2])
-
-# Add a constant term
-model = sm.add_constant(model)
-
-results = model.fit()
-
-# A card is said to be a substitute if the coefficient on number of cards is negative for n>=1
-# and the coefficient on number of cards is positive for n=0
-
-print(results.summary())
 
 # Print the coefficients
 exit()
