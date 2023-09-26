@@ -692,14 +692,14 @@ card1 = "Improvised Club"
 card2 = "Smite the Deathless"
 card_data = computeDraftStats(card1, card2, drafts)
 
-# Do a linear regression of 'was card1 picked' on 'number of card2 in pool' and 'number of same colour cards in pool'
-
 y = []
 colours = []
 
 card2InPool = {}
-numCard2InPool = []
-for i in range(0, 6):
+
+# Max number of card2 multiples to consider
+num_multiples = 5
+for i in range(0, num_multiples + 1):
     card2InPool[i] = []
 
 
@@ -708,6 +708,7 @@ for pick in card_data[card1].picks:
         y.append(1)
     else:
         y.append(0)
+    
     colours.append(pick.colourInPool)
 
     numCard2 = pick.numCardInPool[card2]
@@ -717,29 +718,23 @@ for pick in card_data[card1].picks:
             card2InPool[i].append(1)
         else:
             card2InPool[i].append(0)
-    
-    numCard2InPool.append(numCard2)
 
+# Do a regression of Y on:
+# colours
+# an indicator variable for x = 0 to num_multiples, indicating whethere there are that many card2 in the pack
+model = sm.OLS(y, card2InPool[0], card2InPool[1], card2InPool[2])
 
-# Do the linear regression of y against colours, numCard2, numCard1
-# Add a constant
+# Add a constant term
+model = sm.add_constant(model)
 
-# Just regress on the number of card 2 in the pool
-X = sm.add_constant(np.column_stack((colours, numCard2InPool)))
-
-# Regress with separate variables for each quantity of card 2 in the pool
-X = sm.add_constant(np.column_stack((colours, card2InPool[0], card2InPool[1], card2InPool[2], card2InPool[3], card2InPool[4], card2InPool[5])))
-
-model = sm.OLS(y, X)
 results = model.fit()
 
-# Print the results
+# A card is said to be a substitute if the coefficient on number of cards is negative for n>=1
+# and the coefficient on number of cards is positive for n=0
+
 print(results.summary())
 
-# Print the mean of each variable
-print(f"Mean of y: {mean(y)}")
-print(f"Mean of colours: {mean(colours)}")
-
+# Print the coefficients
 exit()
 
 
