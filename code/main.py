@@ -4,6 +4,9 @@ import csv
 import time
 from filecache import filecache
 from statistics import mean
+import numpy as np
+import statsmodels.api as sm
+
 
 csv_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "draft_data_public.LTR.PremierDraft.csv")
 cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_cards.txt")
@@ -12,13 +15,38 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_
 
 debug = False
 
-num_drafts = 1000
+num_drafts = 10000
+
+def getColours():
+    COLOURS = ['W', 'U', 'B', 'R', 'G', '']
+
+    tempColours = []
+
+    for COLOUR in COLOURS:
+        if COLOUR not in tempColours:
+            tempColours.append(COLOUR)
+        for secondColour in COLOURS:
+            if COLOUR != secondColour:
+                tempColours.append(COLOUR + secondColour)
+            for thirdColour in COLOURS:
+                if COLOUR != secondColour and COLOUR != thirdColour and secondColour != thirdColour:
+                    tempColours.append(COLOUR + secondColour + thirdColour)
+                for fourthColour in COLOURS:
+                    if COLOUR != secondColour and COLOUR != thirdColour and COLOUR != fourthColour and secondColour != thirdColour and secondColour != fourthColour and thirdColour != fourthColour:
+                        tempColours.append(COLOUR + secondColour + thirdColour + fourthColour)
+                    for fifthColour in COLOURS:
+                        if COLOUR != secondColour and COLOUR != thirdColour and COLOUR != fourthColour and COLOUR != fifthColour and secondColour != thirdColour and secondColour != fourthColour and secondColour != fifthColour and thirdColour != fourthColour and thirdColour != fifthColour and fourthColour != fifthColour:
+                            tempColours.append(COLOUR + secondColour + thirdColour + fourthColour + fifthColour)
+    COLOURS = tempColours
+    return COLOURS
+
+COLOURS = getColours()
 
 # Magic numbers
-COLOURS = ['W', 'U', 'B', 'R', 'G']
 NUM_HEADERS = 12
 END_OF_PACK = 277
 END_OF_POOL = 2 * END_OF_PACK - NUM_HEADERS - 1
+
 # Dawn of a new age is at the end for some reason
 DAWN_OF_A_NEW_AGE_PACK = END_OF_POOL + 1
 DAWN_OF_A_NEW_AGE_POOL = END_OF_POOL + 2
@@ -48,6 +76,8 @@ class Pick:
         self.pack_cards = []
         self.pool_cards = []
 
+        self.numCardInPool = {}
+
 class Card:
 
     def __init__(self):
@@ -73,6 +103,8 @@ class Card:
         self.substitutes = []
         self.timesSeen = 0
         self.timesPicked = 0
+        self.picks = []
+        self.pairwisePickRate = {}
 
     # Do sorts by name
     def __lt__(self, other):
@@ -520,7 +552,6 @@ def elasticitySubstitution(card1, card2, drafts):
     #print(f"Elasticity of substitution between {card2} and {card1}: {elasticity2}")
     return elasticity
 
-
 def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_card=1):
 
     card1 = getCardFromCardName(cardName1, card_data)
@@ -542,27 +573,13 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
     picksWhereCard1Picked = []
     picksWhereCard2Picked = []
 
-    # Colour pick rate analysis
-    card1SeenWithColour = {}
-    card1PickedWithColour = {}
-
-    card2SeenWithColour = {}
-    card2PickedWithColour = {}
-
-    # Conditional card pick rate analysis
-    card1SeenWithCard2 = {}
-    card1PickedWithCard2 = {}
-
-    card2SeenWithCard1 = {}
-    card2PickedWithCard1 = {}
 
     for draft in drafts:
         for pick in draft.picks:
 
-            # Populate with 0 values
-            for i in range(30):
-                card1SeenWithColour[i] = 0
-                card1PickedWithColour[i] = 0
+            # If the pick doesn't contain either card, skip it
+            if cardName1 not in pick.pack_cards and cardName2 not in pick.pack_cards:
+                continue
 
             # Pack analysis
             # Count the number of times each card was seen
@@ -589,11 +606,13 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
                 else:
                     neitherCardPicked += 1
 
-
             # Pool analysis
             card1InPool = 0
             card2InPool = 0
-            coloursInPool = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0}
+            coloursInPool = {}
+            for colour in COLOURS:
+                coloursInPool[colour] = 0
+
             for poolCardName in pick.pool_cards:
                 poolCardColour = getCardFromCardName(poolCardName, card_data).colour
                 coloursInPool[poolCardColour] += 1
@@ -602,49 +621,23 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
                 if poolCardName == cardName2:
                     card2InPool += 1
 
-            # Calculate number of times card 1 was picked with n cards of same colour in pool
-            # for n = 0 to 29
-            for i in range(30):
-                if coloursInPool[card1Colour] >= i:
-                    card1SeenWithColour[i] += 1
-                    if cardName1 == pick.pick:
-                        card1PickedWithColour[i] += 1
-            # Do the same for card 2
-            for i in range(30):
-                if coloursInPool[card2Colour] >= i:
-                    card2SeenWithColour[i] += 1
-                    if cardName2 == pick.pick:
-                        card2PickedWithColour[i] += 1
+            # Store the pick information in the card objects
+            pick.colourInPool = coloursInPool[card1Colour]
 
-            # Calculate the number of times card 1 was picked with n copies of card 2 in the pool
-            # for n = 0 to 29
-            for i in range(30):
-                if card2InPool >= i:
-                    card1SeenWithCard2[i] += 1
-                    if cardName1 == pick.pick:
-                        card1PickedWithCard2[i] += 1
+            pick.numCardInPool[cardName1] = card1InPool
+            pick.numCardInPool[cardName2] = card2InPool
 
-            # Do the same for card 2
-            for i in range(30):
-                if card1InPool >= i:
-                    card2SeenWithCard1[i] += 1
-                    if cardName2 == pick.pick:
-                        card2PickedWithCard1[i] += 1
+            # Also count packCard as a substitute for itself
+            pick.numCardInPool[cardName2] += pick.numCardInPool[cardName1]
 
-    # Set dictionary of card seen with x cards of same colour in pool
-    card_data[cardName1].seenWithColour = card1SeenWithColour
-    card_data[cardName1].pickedWithColour = card1PickedWithColour
+            # Store with each card a list of picks where it was seen
+            if cardName1 in pick.pack_cards:
+                card1.picks.append(pick)
+            if cardName2 in pick.pack_cards:
+                card2.picks.append(pick)
 
-    card_data[cardName2].seenWithColour = card2SeenWithColour
-    card_data[cardName2].pickedWithColour = card2PickedWithColour
-
-    # Set dictionary of card seen with x copies of card 2 in pool
-    card_data[cardName1].seenWithCard = card1SeenWithCard2
-    card_data[cardName1].pickedWithCard = card1PickedWithCard2
-
-    # Set dictionary of card seen with x copies of card 1 in pool
-    card_data[cardName2].seenWithCard = card2SeenWithCard1
-    card_data[cardName2].pickedWithCard = card2PickedWithCard1
+    card_data[cardName1] = card1
+    card_data[cardName2] = card2
 
     # Set overall pick rate for each card
     card_data[cardName1].pickRate = card1Picked / card1Seen
@@ -654,6 +647,7 @@ def computeDraftStats(cardName1, cardName2, drafts, num_pool_card=1, num_colour_
     card_data[cardName1].pairwisePickRate[card2] = card1PickedOverCard2 / bothCardsSeen
     card_data[cardName2].pairwisePickRate[card1] = card2PickedOverCard1 / bothCardsSeen
 
+    return card_data
                 
 
 
@@ -691,6 +685,63 @@ drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
 
 card_data = {}
 card_data = getCardData()
+
+
+# Compute draft stats
+card1 = "Improvised Club"
+card2 = "Smite the Deathless"
+card_data = computeDraftStats(card1, card2, drafts)
+
+# Do a linear regression of 'was card1 picked' on 'number of card2 in pool' and 'number of same colour cards in pool'
+
+y = []
+colours = []
+
+card2InPool = {}
+numCard2InPool = []
+for i in range(0, 6):
+    card2InPool[i] = []
+
+
+for pick in card_data[card1].picks:
+    if pick.pick == card1:
+        y.append(1)
+    else:
+        y.append(0)
+    colours.append(pick.colourInPool)
+
+    numCard2 = pick.numCardInPool[card2]
+    
+    for i in card2InPool.keys():
+        if numCard2 == i:
+            card2InPool[i].append(1)
+        else:
+            card2InPool[i].append(0)
+    
+    numCard2InPool.append(numCard2)
+
+
+# Do the linear regression of y against colours, numCard2, numCard1
+# Add a constant
+
+# Just regress on the number of card 2 in the pool
+X = sm.add_constant(np.column_stack((colours, numCard2InPool)))
+
+# Regress with separate variables for each quantity of card 2 in the pool
+X = sm.add_constant(np.column_stack((colours, card2InPool[0], card2InPool[1], card2InPool[2], card2InPool[3], card2InPool[4], card2InPool[5])))
+
+model = sm.OLS(y, X)
+results = model.fit()
+
+# Print the results
+print(results.summary())
+
+# Print the mean of each variable
+print(f"Mean of y: {mean(y)}")
+print(f"Mean of colours: {mean(colours)}")
+
+exit()
+
 
 #card_data = computePickRates(drafts, card_data)
 
