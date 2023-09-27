@@ -77,6 +77,10 @@ class Pick:
 
         self.numCardInPool = {}
 
+        self.colourInPool = {}
+        for colour in COLOURS:
+            self.colourInPool[colour] = 0
+
 class Card:
 
     def __init__(self):
@@ -596,7 +600,6 @@ def computeConditionalPickRate(poolCard, packCard, drafts, num_pool_card=1):
         print (f"Pick rate of {packCard} while at least {num_pool_card} {poolCard} was in the pool: {timesPickedWhileInPool / timesSeenWhileInPool}")
     return timesPickedWhileInPool / timesSeenWhileInPool
 
-
 def elasticitySubstitution(card1, card2, drafts):
 
     # Compute the colour conditional pick rate for the cards
@@ -637,112 +640,39 @@ def elasticitySubstitution(card1, card2, drafts):
     #print(f"Elasticity of substitution between {card2} and {card1}: {elasticity2}")
     return elasticity
 
-def computeDraftStats(cardName1, cardName2, drafts):
-
-    card1 = getCardFromCardName(cardName1, card_data)
-    card2 = getCardFromCardName(cardName2, card_data)
-
-    card1Colour = card1.colour
-    card2Colour = card2.colour
-
-    card1Seen = 0
-    card2Seen = 0
-    card1Picked = 0
-    card2Picked = 0
-
-    bothCardsSeen = 0
-    card1PickedOverCard2 = 0
-    card2PickedOverCard1 = 0
-    neitherCardPicked = 0
-
-    picksWhereCard1Picked = []
-    picksWhereCard2Picked = []
-
+def computeDraftStats(cardNames, drafts):
 
     for draft in drafts:
         for pick in draft.picks:
 
-            # If the pick doesn't contain either card, skip it
-            if cardName1 not in pick.pack_cards and cardName2 not in pick.pack_cards:
-                continue
-
-            # Pack analysis
-            # Count the number of times each card was seen
-            # Count the number of times each card was picked
-            if cardName1 in pick.pack_cards:
-                card1Seen += 1
-                if cardName1 == pick.pick:
-                    card1Picked += 1
-                    picksWhereCard1Picked.append(pick)
-            
-            if cardName2 in pick.pack_cards:
-                card2Seen += 1
-                if cardName2 == pick.pick:
-                    card2Picked += 1
-                    picksWhereCard2Picked.append(pick)
-
-            # Both cards in the pack analysis
-            if cardName1 in pick.pack_cards and cardName2 in pick.pack_cards:
-                bothCardsSeen += 1
-                if cardName1 == pick.pick:
-                    card1PickedOverCard2 += 1
-                elif cardName2 == pick.pick:
-                    card2PickedOverCard1 += 1
-                else:
-                    neitherCardPicked += 1
-
             # Pool analysis
-            card1InPool = 0
-            card2InPool = 0
-            coloursInPool = {}
-            for colour in COLOURS:
-                coloursInPool[colour] = 0
-
+            # Count number of coloured cards in the pool
             for poolCardName in pick.pool_cards:
-                poolCardColour = getCardFromCardName(poolCardName, card_data).colour
-                coloursInPool[poolCardColour] += 1
-                if poolCardName == cardName1:
-                    card1InPool += 1
-                if poolCardName == cardName2:
-                    card2InPool += 1
+                for cardName in cardNames:
+                    pick.numCardInPool[cardName] = len([x for x in pick.pool_cards if x == cardName])
+                    print(f"setting ")
 
-            # Store the pick information in the card objects
-            pick.colourInPool = coloursInPool[card1Colour]
+                poolCard = getCardFromCardName(poolCardName, card_data)
+                poolCardColour = poolCard.colour
 
-            pick.numCardInPool[cardName1] = card1InPool
-            pick.numCardInPool[cardName2] = card2InPool
+                pick.colourInPool[poolCardColour] += 1
+            
+            for cardName in cardNames:
+                card = getCardFromCardName(cardName, card_data)
 
-            # Also count packCard as a substitute for itself
-            pick.numCardInPool[cardName2] += pick.numCardInPool[cardName1]
+                
+                if cardName in pick.pack_cards:
+                    
+                    # Store with each card a list of picks where the card was seen
+                    card.picks.append(pick)
 
-            # Store with each card a list of picks where it was seen
-            if cardName1 in pick.pack_cards:
-                card1.picks.append(pick)
-            if cardName2 in pick.pack_cards:
-                card2.picks.append(pick)
+                    card.timesSeen += 1
+                    if cardName == pick.pick:
+                        card.timesPicked += 1
 
-    card_data[cardName1] = card1
-    card_data[cardName2] = card2
-
-    # Set any of these valuse to 0 if the denominator is 0
-    if card1Seen == 0:
-        card_data[cardName1].pickRate = 0.0
-    else:
-        card_data[cardName1].pickRate = card1Picked / card1Seen
-    if card2Seen == 0:
-        card_data[cardName2].pickRate = 0.0
-    else:
-        card_data[cardName2].pickRate = card2Picked / card2Seen
-
-    # Set the pairwise pick rate for the cards
-    if bothCardsSeen == 0:
-        card_data[cardName1].pairwisePickRate[cardName2] = 0.0
-        card_data[cardName2].pairwisePickRate[cardName1] = 0.0
-    else:
-        card_data[cardName1].pairwisePickRate[card2] = card1PickedOverCard2 / bothCardsSeen
-        card_data[cardName2].pairwisePickRate[card1] = card2PickedOverCard1 / bothCardsSeen
 
     return card_data
+    
                 
 
 
@@ -766,8 +696,8 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def checkSubstitution(card1, card2, drafts, card_data, num_multiples=10):
-    card_data = computeDraftStats(card1, card2, drafts)
+def checkSubstitution(card1, cardNames, drafts, num_multiples=10):
+    computeDraftStats([card1] + cardNames, drafts)
 
     y = []
     colours = []
@@ -777,18 +707,30 @@ def checkSubstitution(card1, card2, drafts, card_data, num_multiples=10):
     for i in range(num_multiples + 1):
         sumCards[i] = []
 
-    for pick in card_data[card1].picks:
+    card1Obj = getCardFromCardName(card1, card_data)
+    card1Colour = card1Obj.colour
+
+    for pick in card1Obj.picks:
+
         if pick.pick == card1:
             y.append(1)
         else:
             y.append(0)
         
-        colours.append(pick.colourInPool)
+        # Print all the cards in the pool
+        for cardName in pick.pool_cards:
+            print(cardName)
 
-        numCard1 = pick.numCardInPool[card1]
-        numCard2 = pick.numCardInPool[card2]
+        # Append number of cards that are the same colour as card1
+        colours.append(pick.colourInPool[card1Colour])
 
-        sumOfCards = numCard1 + numCard2
+        sumOfCards = 0
+        for cardName in cardNames:
+            print(pick.numCardInPool)
+            if cardName in pick.numCardInPool:
+                sumOfCards += pick.numCardInPool[cardName]
+        # Also count card1 as a substitute for itself.
+        sumOfCards += pick.numCardInPool[card1]
         
         for i in sumCards.keys():
             if sumOfCards == i:
@@ -812,7 +754,7 @@ def checkSubstitution(card1, card2, drafts, card_data, num_multiples=10):
 
     endog = np.array(y)
 
-    exog = 
+    exog = np.array(colours)
 
     for i in sumCards.keys():
         exog = np.column_stack((exog, sumCards[i]))
@@ -822,11 +764,17 @@ def checkSubstitution(card1, card2, drafts, card_data, num_multiples=10):
 
     model = sm.OLS(endog, exog)
 
+    # Label the variables in the model
+    labels = ["Constant", "Colour"]
+    for i in sumCards.keys():
+        labels.append(f"{i} {card1} + {card2}")
+
+    model.exog_names[:] = labels
+
     results = model.fit()
 
     print(results.summary())
 
-    
 
 def regressOnNumCard2(card1, card2, drafts, card_data):
 
@@ -959,7 +907,7 @@ card_data = {}
 card_data = getCardData()
 
 
-checkSubstitution("Improvised Club", "Smite the Deathless", drafts, card_data)
+checkSubstitution("Smite the Deathless", ["Improvised Club"], drafts)
 exit()
 
 # Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
