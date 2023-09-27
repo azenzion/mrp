@@ -12,7 +12,6 @@ csv_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "draft_dat
 cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_cards.txt")
 
 # TODO: Better naming conventions for cache files
-
 debug = False
 
 num_drafts = 10000
@@ -109,6 +108,92 @@ class Card:
     # Do sorts by name
     def __lt__(self, other):
         return self.name < other.name
+
+
+def getPairPickRatesFromCache():
+
+    pairs = {}
+
+    # Read in the pair pick rates from the cache
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", "pick_rates.csv"), "r") as f:
+        csv_reader = csv.reader(f, delimiter=",")
+        next(csv_reader)
+        for row in csv_reader:
+            pairName = row[0] + " & " + row[1]
+            pairs[pairName] = [float(row[2]), float(row[3])]
+
+    return pairs
+
+def computePairwisePickSubstitutes(pairs, card_data):
+    # Eliminate every pair where there's a GIH winrate of 0
+    validPairs = {}
+    for pair in pairs.keys():
+        card1, card2 = getCardsFromPair(pair, card_data)
+        if pairs[pair][0] == 0.0 or pairs[pair][1] == 0.0:
+            print (f"Eliminating {pair} because one of them had a 0 pick rate in the data")
+            continue
+        elif card1.gameInHandWinrate == 0.0 or card2.gameInHandWinrate == 0.0:
+            print (f"Eliminating {pair} because one of them had a 0 GIH winrate in the data")
+            continue
+        else:
+            validPairs[pair] = pairs[pair]
+
+    # For each pair, caclulate the absolute difference in pick rate
+    for pair in validPairs.keys():
+        card1, card2 = getCardsFromPair(pair, card_data)
+
+        card1PickRate = pairs[pair][0]
+        card2PickRate = pairs[pair][1]
+    
+        # Calculate the absolute difference in pick rate
+        absDiff = abs(card1PickRate - card2PickRate)
+
+        # Store the absolute difference in the pair
+        validPairs[pair] = [card1PickRate, card2PickRate, absDiff]
+
+    # Sort the pairs by absolute difference in pick rate
+    sortedPairs = sorted(validPairs.items(), key=lambda x: x[1][2], reverse=True)
+
+
+    # For each card, compute the substitutes
+    # We define these as cards where, when players have to choose between the two cards,
+    # The absolute difference in pick rate is less than 5%
+    for pair in sortedPairs:
+        card1, card2 = getCardsFromPair(pair[0], card_data)
+        if pair[1][2] < 0.05:
+            print(f"Adding {card1.name} and {card2.name} as substitutes. pickrates: {pair[1][0]} {pair[1][1]}")
+            card1.substitutes.append(card2)
+            card2.substitutes.append(card1)
+
+
+    # Order cards by number of substitutes
+    cardSubstitutes = {}
+    for card in card_data.values():
+        cardSubstitutes[card.name] = len(card.substitutes)
+
+    # Sort the cards by number of substitutes
+    sortedSubstitutes = sorted(cardSubstitutes.items(), key=lambda x: x[1], reverse=True)
+
+    # Eliminate cards with no substitutes
+    cardsWithSubstitutes = {}
+    for cardName in sortedSubstitutes:
+        card = getCardFromCardName(cardName[0], card_data)
+        if len(card.substitutes) > 0:
+            cardsWithSubstitutes[cardName[0]] = cardName[1]
+
+
+    # Print the sorted cards
+    for cardName in sortedSubstitutes:
+
+        if cardName[1] == 0:
+            continue
+
+        card = getCardFromCardName(cardName[0], card_data)
+        print(f"{cardName[0]}: {cardName[1]}")
+        for substitute in card.substitutes:
+            print(f"    {substitute.name}")
+
+    return cardsWithSubstitutes
 
 def getCardFromCardName(cardName, card_data):
     if cardName in card_data:
@@ -681,7 +766,69 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def regression(card1, card2, drafts, card_data):
+def checkSubstitution(card1, card2, drafts, card_data, num_multiples=10):
+    card_data = computeDraftStats(card1, card2, drafts)
+
+    y = []
+    colours = []
+
+    sumCards = {}
+
+    for i in range(num_multiples + 1):
+        sumCards[i] = []
+
+    for pick in card_data[card1].picks:
+        if pick.pick == card1:
+            y.append(1)
+        else:
+            y.append(0)
+        
+        colours.append(pick.colourInPool)
+
+        numCard1 = pick.numCardInPool[card1]
+        numCard2 = pick.numCardInPool[card2]
+
+        sumOfCards = numCard1 + numCard2
+        
+        for i in sumCards.keys():
+            if sumOfCards == i:
+                sumCards[i].append(1)
+            else:
+                sumCards[i].append(0)
+
+
+    # Eliminate values that didn't have enough observations
+    threshold = 40
+    temp = {}
+    for i in range(0, num_multiples + 1):
+        if sum(sumCards[i]) < threshold:
+            print(f"Not enough observations with {i} cards in the pool.")
+            print("Will eliminate all higher values")
+            break
+        else:
+            temp[i] = sumCards[i]
+
+    sumCards = temp
+
+    endog = np.array(y)
+
+    exog = 
+
+    for i in sumCards.keys():
+        exog = np.column_stack((exog, sumCards[i]))
+
+    # Add a constant term
+    exog = sm.add_constant(exog)
+
+    model = sm.OLS(endog, exog)
+
+    results = model.fit()
+
+    print(results.summary())
+
+    
+
+def regressOnNumCard2(card1, card2, drafts, card_data):
 
     card_data = computeDraftStats(card1, card2, drafts)
 
@@ -712,6 +859,8 @@ def regression(card1, card2, drafts, card_data):
             else:
                 card2InPool[i].append(0)
 
+        
+
     # Eliminate any number of card2 with less than 30 samples
     tempCard2InPool = {}
     for i in range(0, num_multiples + 1):
@@ -739,37 +888,58 @@ def regression(card1, card2, drafts, card_data):
 
     exog = np.array(card2InPool[0])
     for i in range(1, num_multiples + 1):
-        exog = np.column_stack((exog, card2InPool[i]))
+        try:
+            exog = np.column_stack((exog, card2InPool[i]))
+        except KeyError as e:
+            print(f"KeyError: {e}")
 
     # Add a constant term
-    # This accounts for the unconditional probability of picking card1
     exog = sm.add_constant(exog)
 
     model = sm.OLS(endog, exog)
 
     results = model.fit()
 
-    # If there's multicollinearity, the condition number will be high
-    print(f"Condition number: {results.condition_number}")
-
+    weightedAverage = 0.0
     #print(results.summary())
+    try:
 
-    # A card is said to be a substitute if the coefficient on number of cards is negative for n>=1
-    # and the coefficient on number of cards is positive for n=0
-    debug = True
-    if debug:
-        # Print the coefficients
-        print(f"Effects of {card2} in pool on picking {card1}")
-        for i in range(0, num_multiples + 1):
-            print(f"{i}: {results.params[i + 1]}")
+        # A card is said to be a substitute if the coefficient on number of cards is negative for n>=1
+        # and the coefficient on number of cards is positive for n=0
+        debug = True
+        if debug:
+            # Print the coefficients
+            print(f"Effects of {card2} in pool on picking {card1}")
+            for i in range(0, num_multiples + 1):
+                print(f"{i}: {results.params[i + 1]}")
+        
 
-    # If all the params for nonzero amounts of card2 are negative, then card2 is a substitute for card1
-    if all(i < 0 for i in results.params[1:]):
+        # Compute the weighted average of the nonzero coefficients
+
+
+        for i in range(1, num_multiples + 1):
+            num_picks = sum(card2InPool[i])
+            weightedAverage += results.params[i + 1] * num_picks
+    except IndexError as e:
+        print(f"IndexError: {e}")
+    except KeyError as e:
+        print(f"KeyError: {e}")
+
+    # Weighted average of the coefficients for 1 to num_multiples must be negative
+    # Then we call the cards substitutes 
+       
+    substitute = weightedAverage < 0.0
+
+    print(f"Weighted average of coefficients: {weightedAverage}")
+
+    # All coefficients must be negative
+    # substitute = all(results.params[1:] < 0.0)
+    if substitute:
         print(f"{card2} is a substitute for {card1}")
     else:
         print(f"{card2} is not a substitute for {card1}")
 
-    return(all(i < 0 for i in results.params[1:]))
+    return substitute
 
     
 
@@ -789,6 +959,70 @@ card_data = {}
 card_data = getCardData()
 
 
+checkSubstitution("Improvised Club", "Smite the Deathless", drafts, card_data)
+exit()
+
+# Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
+
+
+rallySubs = []
+rallyComps = []
+smiteSubs = []
+smiteComps = []
+for cardName in card_data.keys():
+
+    # Only red cards for now
+    if card_data[cardName].colour != "R":
+        continue
+
+    if regressOnNumCard2(cardName, "Rally at the Hornburg", drafts, card_data):
+    #if regression("Rally at the Hornburg", cardName, drafts, card_data):
+        rallySubs.append(cardName)
+    else:
+        rallyComps.append(cardName)
+    if regressOnNumCard2(cardName, "Smite the Deathless", drafts, card_data):
+    #if regression("Smite the Deathless", cardName, drafts, card_data):
+        smiteSubs.append(cardName)
+    else:
+        smiteComps.append(cardName)
+
+print(f"Number of substitutes for Rally at the Hornburg: {len(rallySubs)}")
+print(f"Number of substitutes for Smite the Deathless: {len(smiteSubs)}")
+
+# Print what the substitutes are
+print("Substitutes for Rally at the Hornburg:")
+for cardName in rallySubs:
+    print(cardName)
+
+print("\n========================\n")
+
+
+print("Substitutes for Smite the Deathless:")
+for cardName in smiteSubs:
+    print(cardName)
+
+print("\n========================\n")
+
+
+# For each card, sum the times seen for all its substitutes
+print("Number of rally substitutes seen:")
+numSeen = 0
+for cardName in rallySubs:
+    numSeen += card_data[cardName].numberSeen
+print(numSeen)
+
+print("Number of smite substitutes seen:")
+numSeen = 0
+for cardName in smiteSubs:
+    numSeen += card_data[cardName].numberSeen
+print(numSeen)
+
+
+
+exit()
+
+
+
 # Generate all the pairs of red cards
 redCards = []
 for card in card_data.values():
@@ -805,7 +1039,7 @@ for i in range(0, len(redCards)):
     for j in range(i + 1, len(redCards)):
         card1 = redCards[i]
         card2 = redCards[j]
-        if regression(card1, card2, drafts, card_data):
+        if regressOnNumCard2(card1, card2, drafts, card_data):
             numSubstitutes += 1
             card1 = getCardFromCardName(card1, card_data)
             card1.substitutes.append(card2)
@@ -843,92 +1077,11 @@ exit()
 
 #inversionPairs = findInversionPairs(pairs, card_data)
 
-pairs = {}
-
-# Read in the pair pick rates from the cache
-with open(os.path.join(os.path.dirname(__file__), "..", "data", "pick_rates.csv"), "r") as f:
-    csv_reader = csv.reader(f, delimiter=",")
-    next(csv_reader)
-    for row in csv_reader:
-        pairName = row[0] + " & " + row[1]
-        pairs[pairName] = [float(row[2]), float(row[3])]
-
 # Read in the inversion pairs from the cache
 #inversionPairs = readInversionPairsFromCache()
 
 
-# Eliminate every pair where there's a GIH winrate of 0
-validPairs = {}
-for pair in pairs.keys():
-    card1, card2 = getCardsFromPair(pair, card_data)
-    if pairs[pair][0] == 0.0 or pairs[pair][1] == 0.0:
-        print (f"Eliminating {pair} because one of them had a 0 pick rate in the data")
-        continue
-    elif card1.gameInHandWinrate == 0.0 or card2.gameInHandWinrate == 0.0:
-        print (f"Eliminating {pair} because one of them had a 0 GIH winrate in the data")
-        continue
-    else:
-        validPairs[pair] = pairs[pair]
 
-
-# For each pair, caclulate the absolute difference in pick rate
-for pair in validPairs.keys():
-    card1, card2 = getCardsFromPair(pair, card_data)
-
-    card1PickRate = pairs[pair][0]
-    card2PickRate = pairs[pair][1]
-   
-    # Calculate the absolute difference in pick rate
-    absDiff = abs(card1PickRate - card2PickRate)
-
-    # Store the absolute difference in the pair
-    validPairs[pair] = [card1PickRate, card2PickRate, absDiff]
-
-# Sort the pairs by absolute difference in pick rate
-sortedPairs = sorted(validPairs.items(), key=lambda x: x[1][2], reverse=True)
-
-# Print the sorted pairs
-for pair in sortedPairs:
-    print(f"{pair[0]}: {pair[1][0]} {pair[1][1]} {pair[1][2]}")
-
-
-# For each card, compute the substitutes
-# We define these as cards where, when players have to choose between the two cards,
-# The absolute difference in pick rate is less than 5%
-for pair in sortedPairs:
-    card1, card2 = getCardsFromPair(pair[0], card_data)
-    if pair[1][2] < 0.05:
-        print(f"Adding {card1.name} and {card2.name} as substitutes. pickrates: {pair[1][0]} {pair[1][1]}")
-        card1.substitutes.append(card2)
-        card2.substitutes.append(card1)
-
-
-# Order cards by number of substitutes
-cardSubstitutes = {}
-for card in card_data.values():
-    cardSubstitutes[card.name] = len(card.substitutes)
-
-# Sort the cards by number of substitutes
-sortedSubstitutes = sorted(cardSubstitutes.items(), key=lambda x: x[1], reverse=True)
-
-# Eliminate cards with no substitutes
-cardsWithSubstitutes = {}
-for cardName in sortedSubstitutes:
-    card = getCardFromCardName(cardName[0], card_data)
-    if len(card.substitutes) > 0:
-        cardsWithSubstitutes[cardName[0]] = cardName[1]
-
-
-# Print the sorted cards
-for cardName in sortedSubstitutes:
-
-    if cardName[1] == 0:
-        continue
-
-    card = getCardFromCardName(cardName[0], card_data)
-    print(f"{cardName[0]}: {cardName[1]}")
-    for substitute in card.substitutes:
-        print(f"    {substitute.name}")
 
 
 substituteElasticities = []
