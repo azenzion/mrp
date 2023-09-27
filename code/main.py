@@ -2,6 +2,7 @@
 import os
 import csv
 import time
+import pickle
 from filecache import filecache
 from statistics import mean
 import numpy as np
@@ -14,7 +15,7 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_
 # TODO: Better naming conventions for cache files
 debug = False
 
-num_drafts = 10000
+num_drafts = 100000
 
 def getColours():
     COLOURS = ['W', 'U', 'B', 'R', 'G', '']
@@ -40,6 +41,10 @@ def getColours():
     return COLOURS
 
 COLOURS = getColours()
+
+emptyColoursDict = {}
+for colour in COLOURS:
+    emptyColoursDict[colour] = 0
 
 # Magic numbers
 NUM_HEADERS = 12
@@ -77,9 +82,7 @@ class Pick:
 
         self.numCardInPool = {}
 
-        self.colourInPool = {}
-        for colour in COLOURS:
-            self.colourInPool[colour] = 0
+        self.colourInPool = emptyColoursDict.copy()
 
 class Card:
 
@@ -112,6 +115,11 @@ class Card:
     # Do sorts by name
     def __lt__(self, other):
         return self.name < other.name
+
+
+def getDraftsFromCache():
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", f"drafts.pickle"), "r") as f:
+        return pickle.load(f)
 
 
 def getPairPickRatesFromCache():
@@ -378,15 +386,7 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
             # Stop after num_drafts drafts
             if len(drafts) > numDrafts:
                 break
-    
-    # Cache to disk
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", f"drafts.csv"), "w") as f:
-        csv_writer = csv.writer(f, delimiter=",")
-        csv_writer.writerow(["Expansion", "Event Type", "Draft ID", "Draft Time", "Rank", "Event Match Wins", "Event Match Losses", "Pack Number", "Pick Number", "Pick", "Pick Maindeck Rate", "Pick Sideboard In Rate", "Pack Cards", "Pool Cards"])
-        for draft in drafts:
-            for pick in draft.picks:
-                csv_writer.writerow([pick.expansion, pick.event_type, pick.draft_id, pick.draft_time, pick.rank, pick.event_match_wins, pick.event_match_losses, pick.pack_number, pick.pick_number, pick.pick, pick.pick_maindeck_rate, pick.pick_sideboard_in_rate, pick.pack_cards, pick.pool_cards])
-    
+       
     return drafts
 
 def findInversionPairs(pairs, card_data):
@@ -642,15 +642,22 @@ def elasticitySubstitution(card1, card2, drafts):
 
 def computeDraftStats(cardNames, drafts):
 
+    print(f"Computing draft stats for {cardNames}")
+
     for draft in drafts:
         for pick in draft.picks:
+
+            # initialize values
+            for cardName in cardNames:
+                if cardName not in pick.numCardInPool:
+                        pick.numCardInPool[cardName] = 0
 
             # Pool analysis
             # Count number of coloured cards in the pool
             for poolCardName in pick.pool_cards:
                 for cardName in cardNames:
-                    pick.numCardInPool[cardName] = len([x for x in pick.pool_cards if x == cardName])
-                    print(f"setting ")
+                    if cardName == poolCardName:
+                        pick.numCardInPool[cardName] += 1
 
                 poolCard = getCardFromCardName(poolCardName, card_data)
                 poolCardColour = poolCard.colour
@@ -696,8 +703,13 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def checkSubstitution(card1, cardNames, drafts, num_multiples=10):
-    computeDraftStats([card1] + cardNames, drafts)
+def checkSubstitution(card1, cardNames, num_multiples=10, colour=True):
+    print(f"Checking substitution for {card1}, among substitutes {cardNames}")
+
+    # Remove card1 from the list of substitutes
+    # This is so we don't accidentally double count
+    if card1 in cardNames:
+        cardNames.remove(card1)
 
     y = []
     colours = []
@@ -716,17 +728,12 @@ def checkSubstitution(card1, cardNames, drafts, num_multiples=10):
             y.append(1)
         else:
             y.append(0)
-        
-        # Print all the cards in the pool
-        for cardName in pick.pool_cards:
-            print(cardName)
 
         # Append number of cards that are the same colour as card1
         colours.append(pick.colourInPool[card1Colour])
 
         sumOfCards = 0
         for cardName in cardNames:
-            print(pick.numCardInPool)
             if cardName in pick.numCardInPool:
                 sumOfCards += pick.numCardInPool[cardName]
         # Also count card1 as a substitute for itself.
@@ -754,7 +761,10 @@ def checkSubstitution(card1, cardNames, drafts, num_multiples=10):
 
     endog = np.array(y)
 
-    exog = np.array(colours)
+    # Assemble exog matrix
+    exog = np.array([])
+    if colour:
+        exog = np.array(colours)
 
     for i in sumCards.keys():
         exog = np.column_stack((exog, sumCards[i]))
@@ -765,9 +775,12 @@ def checkSubstitution(card1, cardNames, drafts, num_multiples=10):
     model = sm.OLS(endog, exog)
 
     # Label the variables in the model
-    labels = ["Constant", "Colour"]
+    labels = ["Constant"]
+    if colour:
+        labels.append("Same colour cards in pool")
+
     for i in sumCards.keys():
-        labels.append(f"{i} {card1} + {card2}")
+        labels.append(f"{i} substitutes")
 
     model.exog_names[:] = labels
 
@@ -901,13 +914,43 @@ with open(cardlist_file_path, "r") as f:
         ltr_cards.append(line.strip())
 
 drafts = []
-drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
+#drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
+
+drafts = getDraftsFromCache()
+
+# Use pickle to cache
+#with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
+#    pickle.dump(drafts, f)
 
 card_data = {}
 card_data = getCardData()
 
+redRemoval = ["Smite the Deathless",
+            "Improvised Club",
+            "Fear, Fire, Foes!",
+            "Foray of Orcs",
+            "Breaking of the Fellowship", 
+            "Spiteful Banditry"]
 
-checkSubstitution("Smite the Deathless", ["Improvised Club"], drafts)
+blackRemoval = ["Claim the Precious",
+                "Bitter Downfall",
+                 "Gollum's Bite"]
+
+# Red / Black removal spells
+redBlackRemoval = redRemoval + blackRemoval
+
+computeDraftStats(redBlackRemoval, drafts)
+
+#checkSubstitution("Smite the Deathless", ["Improvised Club"])
+#checkSubstitution("Improvised Club", ["Smite the Deathless"])
+
+#checkSubstitution("Improvised Club", redRemoval)
+checkSubstitution("Smite the Deathless", redRemoval)
+exit()
+
+checkSubstitution("Smite the Deathless", redBlackRemoval, colour=False)
+                       
+
 exit()
 
 # Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
