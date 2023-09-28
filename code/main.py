@@ -17,6 +17,12 @@ debug = False
 
 num_drafts = 100000
 
+OPTIMIZE_STORAGE = True
+
+cardNamesHash = {}
+cardNumsHash= {}
+
+
 def getColours():
     COLOURS = ['W', 'U', 'B', 'R', 'G', '']
 
@@ -64,24 +70,27 @@ class Draft:
 class Pick:
 
     def __init__(self):
-        self.expansion = ""
-        self.event_type = ""
-        self.draft_id = ""
-        self.draft_time = ""
-        self.rank = ""
-        self.event_match_wins = ""
-        self.event_match_losses = ""
-        self.pack_number = ""
-        self.pick_number = ""
+
+        self.draft_id = 0
+        self.pack_number = 0
+        self.pick_number = 0
         self.pick = ""
-        self.pick_maindeck_rate = ""
-        self.pick_sideboard_in_rate = ""
-
         self.pack_cards = []
-        self.pool_cards = []
+        
 
+        if not OPTIMIZE_STORAGE:
+            self.expansion = ""
+            self.event_type = ""
+            self.draft_time = 0
+            self.rank = 0
+            self.event_match_wins = 0
+            self.event_match_losses = 0
+            self.pick_maindeck_rate = 0.0
+            self.pick_sideboard_in_rate = 0.0
+            self.pool_cards = []
+        
+        # We set these later
         self.numCardInPool = {}
-
         self.colourInPool = emptyColoursDict.copy()
 
 class Card:
@@ -118,7 +127,8 @@ class Card:
 
 
 def getDraftsFromCache():
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", f"drafts.pickle"), "r") as f:
+    # Read in the draft data from the cache
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "rb") as f:
         return pickle.load(f)
 
 
@@ -327,35 +337,38 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
 
             # Make into a pick object
             pick = Pick()
-            pick.expansion = row[0]
-            pick.event_type = row[1]
             pick.draft_id = row[2]
-            pick.draft_time = row[3]
-            pick.rank = row[4]
-            pick.event_match_wins = row[5]
-            pick.event_match_losses = row[6]
             pick.pack_number = row[7]
             pick.pick_number = row[8]
             pick.pick = row[9]
-            pick.pick_maindeck_rate = row[10]
-            pick.pick_sideboard_in_rate = row[11]
+
+            if not OPTIMIZE_STORAGE:
+                pick.expansion = row[0]
+                pick.event_type = row[1]
+                pick.draft_time = row[3]
+                pick.rank = row[4]
+                pick.event_match_wins = row[5]
+                pick.event_match_losses = row[6]
+                pick.pick_maindeck_rate = row[10]
+                pick.pick_sideboard_in_rate = row[11]
 
             # Parse the cards
             for i in range(NUM_HEADERS, END_OF_PACK):
                 if row[i] == "1":
-                    pick.pack_cards.append(ltr_cards[i - NUM_HEADERS])
+                    pick.pack_cards.append(i - NUM_HEADERS)
         
             # Parse the pool
-            for i in range(END_OF_PACK, END_OF_POOL):
-                num_card_in_pool = row[i]
-                for k in range(int(num_card_in_pool)):
-                    pick.pool_cards.append(ltr_cards[i - END_OF_PACK])
+            if not OPTIMIZE_STORAGE:
+                for i in range(END_OF_PACK, END_OF_POOL):
+                    num_card_in_pool = row[i]
+                    for k in range(int(num_card_in_pool)):
+                        pick.pool_cards.append(i - END_OF_PACK)
 
             # Dawn of a new hope
             if row[DAWN_OF_A_NEW_AGE_PACK] == "1":
-                pick.pack_cards.append("Dawn of a New Age")
+                pick.pack_cards.append(265)
             if row[DAWN_OF_A_NEW_AGE_POOL] == "1":
-                pick.pool_cards.append("Dawn of a New Age")
+                pick.pool_cards.append(265)
 
             if debug:
                 print("PACK")
@@ -649,16 +662,22 @@ def computeDraftStats(cardNames, drafts):
 
             # initialize values
             for cardName in cardNames:
-                if cardName not in pick.numCardInPool:
+                # Find the key which has value cardName
+                # in cardNamesHash
+                cardNum = cardNumsHash[cardName]
+                if cardNum not in pick.numCardInPool:
                         pick.numCardInPool[cardName] = 0
 
             # Pool analysis
             # Count number of coloured cards in the pool
-            for poolCardName in pick.pool_cards:
+            for poolCardNum in pick.pool_cards:
+                
                 for cardName in cardNames:
-                    if cardName == poolCardName:
+                    cardNum = cardNumsHash[cardName]
+                    if cardNum == poolCardNum:
                         pick.numCardInPool[cardName] += 1
 
+                poolCardName = cardNamesHash[poolCardNum]
                 poolCard = getCardFromCardName(poolCardName, card_data)
                 poolCardColour = poolCard.colour
 
@@ -666,9 +685,9 @@ def computeDraftStats(cardNames, drafts):
             
             for cardName in cardNames:
                 card = getCardFromCardName(cardName, card_data)
-
+                cardNum = cardNumsHash[cardName]
                 
-                if cardName in pick.pack_cards:
+                if cardNum in pick.pack_cards:
                     
                     # Store with each card a list of picks where the card was seen
                     card.picks.append(pick)
@@ -703,13 +722,13 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def checkSubstitution(card1, cardNames, num_multiples=10, colour=True):
-    print(f"Checking substitution for {card1}, among substitutes {cardNames}")
+def checkSubstitution(card1, substitutesList, num_multiples=10, colour=True):
+    print(f"Checking substitution for {card1}, among substitutes {substitutesList}")
 
     # Remove card1 from the list of substitutes
     # This is so we don't accidentally double count
-    if card1 in cardNames:
-        cardNames.remove(card1)
+    if card1 in substitutesList:
+        substitutesList.remove(card1)
 
     y = []
     colours = []
@@ -733,11 +752,13 @@ def checkSubstitution(card1, cardNames, num_multiples=10, colour=True):
         colours.append(pick.colourInPool[card1Colour])
 
         sumOfCards = 0
-        for cardName in cardNames:
+        for cardName in substitutesList:
             if cardName in pick.numCardInPool:
                 sumOfCards += pick.numCardInPool[cardName]
         # Also count card1 as a substitute for itself.
         sumOfCards += pick.numCardInPool[card1]
+
+        # TODO: Include number of card1 in pool as separate exog
         
         for i in sumCards.keys():
             if sumOfCards == i:
@@ -785,6 +806,22 @@ def checkSubstitution(card1, cardNames, num_multiples=10, colour=True):
     model.exog_names[:] = labels
 
     results = model.fit()
+
+    # Check whether the number of substitutes coefficients are decreasing
+    # If so, the cards are said to be substitutes
+    substitute = True
+    for i in range(1, num_multiples + 1):
+        if results.params[i + 1] > results.params[i + 2]:
+            substitute = False
+
+    # TODO:
+    # Check here if the coeffecients decrease for a while, and then start increasing
+    # Threshold effect
+
+    if substitute:
+        print(f"{card1} and {substitutesList} are substitutes")
+    else:
+        print(f"{card1} and {substitutesList} are not substitutes")
 
     print(results.summary())
 
@@ -913,14 +950,26 @@ with open(cardlist_file_path, "r") as f:
     for line in f:
         ltr_cards.append(line.strip())
 
+NUM_CARDS_IN_SET = 266
+
+# Populate the hash of number to card name
+# This is to optimize the size of Pick objects
+for i in range(NUM_CARDS_IN_SET):
+    cardNamesHash[i] = ltr_cards[i]
+    cardNumsHash[ltr_cards[i]] = i
+
+GET_DRAFTS_FROM_CACHE = False
+
 drafts = []
-#drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
 
-drafts = getDraftsFromCache()
+if GET_DRAFTS_FROM_CACHE:
+    drafts = getDraftsFromCache()
+else:
+    drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
 
-# Use pickle to cache
-#with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
-#    pickle.dump(drafts, f)
+    # Use pickle to cache
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
+        pickle.dump(drafts, f)
 
 card_data = {}
 card_data = getCardData()
