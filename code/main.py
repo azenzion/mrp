@@ -74,10 +74,9 @@ class Pick:
         self.draft_id = 0
         self.pack_number = 0
         self.pick_number = 0
-        self.pick = ""
+        self.pick = 0
         self.pack_cards = []
         
-
         if not OPTIMIZE_STORAGE:
             self.expansion = ""
             self.event_type = ""
@@ -91,7 +90,7 @@ class Pick:
         
         # We set these later
         self.numCardInPool = {}
-        self.colourInPool = emptyColoursDict.copy()
+        self.colourInPool = {}
 
 class Card:
 
@@ -340,7 +339,7 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
             pick.draft_id = row[2]
             pick.pack_number = row[7]
             pick.pick_number = row[8]
-            pick.pick = row[9]
+            pick.pick = cardNumsHash[row[9]]
 
             if not OPTIMIZE_STORAGE:
                 pick.expansion = row[0]
@@ -352,10 +351,13 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
                 pick.pick_maindeck_rate = row[10]
                 pick.pick_sideboard_in_rate = row[11]
 
-            # Parse the cards
+            # Parse the pack
             for i in range(NUM_HEADERS, END_OF_PACK):
                 if row[i] == "1":
                     pick.pack_cards.append(i - NUM_HEADERS)
+             # Dawn of a new hope
+            if row[DAWN_OF_A_NEW_AGE_PACK] == "1":
+                pick.pack_cards.append(265)
         
             # Parse the pool
             if not OPTIMIZE_STORAGE:
@@ -363,12 +365,9 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
                     num_card_in_pool = row[i]
                     for k in range(int(num_card_in_pool)):
                         pick.pool_cards.append(i - END_OF_PACK)
-
-            # Dawn of a new hope
-            if row[DAWN_OF_A_NEW_AGE_PACK] == "1":
-                pick.pack_cards.append(265)
-            if row[DAWN_OF_A_NEW_AGE_POOL] == "1":
-                pick.pool_cards.append(265)
+                # Dawn of a new hope
+                if row[DAWN_OF_A_NEW_AGE_POOL] == "1":
+                    pick.pool_cards.append(265)
 
             if debug:
                 print("PACK")
@@ -389,6 +388,9 @@ def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
             else:
                 if debug:
                     print(f"Appending pick {pick.pick_number} to new draft {draft.draft_id}")
+
+                # Sort on pick number before moving on
+                current_draft.picks.sort(key=lambda x: x.pick_number)
 
                 draft = Draft()
                 draft.draft_id = pick.draft_id
@@ -658,7 +660,15 @@ def computeDraftStats(cardNames, drafts):
     print(f"Computing draft stats for {cardNames}")
 
     for draft in drafts:
+
+        # Track the pool as we go
+        draftPool = []
+
         for pick in draft.picks:
+
+            pickName = cardNamesHash[pick.pick]
+
+            draftPool.append(pickName)
 
             # initialize values
             for cardName in cardNames:
@@ -666,21 +676,21 @@ def computeDraftStats(cardNames, drafts):
                 # in cardNamesHash
                 cardNum = cardNumsHash[cardName]
                 if cardNum not in pick.numCardInPool:
-                        pick.numCardInPool[cardName] = 0
+                        pick.numCardInPool[cardNum] = 0
 
             # Pool analysis
             # Count number of coloured cards in the pool
-            for poolCardNum in pick.pool_cards:
-                
+            for poolCardName in draftPool:
                 for cardName in cardNames:
-                    cardNum = cardNumsHash[cardName]
-                    if cardNum == poolCardNum:
-                        pick.numCardInPool[cardName] += 1
+                    if cardName == poolCardName:
+                        cardNum = cardNumsHash[cardName]
+                        pick.numCardInPool[cardNum] += 1
 
-                poolCardName = cardNamesHash[poolCardNum]
                 poolCard = getCardFromCardName(poolCardName, card_data)
                 poolCardColour = poolCard.colour
 
+                if poolCardColour not in pick.colourInPool:
+                    pick.colourInPool[poolCardColour] = 0
                 pick.colourInPool[poolCardColour] += 1
             
             for cardName in cardNames:
@@ -722,7 +732,7 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def checkSubstitution(card1, substitutesList, num_multiples=10, colour=True):
+def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
     print(f"Checking substitution for {card1}, among substitutes {substitutesList}")
 
     # Remove card1 from the list of substitutes
@@ -732,63 +742,80 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=True):
 
     y = []
     colours = []
+    card1InPool = []
 
-    sumCards = {}
+    numSubstitutes = {}
 
     for i in range(num_multiples + 1):
-        sumCards[i] = []
+        numSubstitutes[i] = []
 
     card1Obj = getCardFromCardName(card1, card_data)
     card1Colour = card1Obj.colour
 
     for pick in card1Obj.picks:
+        pickName = cardNamesHash[pick.pick]
 
-        if pick.pick == card1:
+        if pickName == card1:
             y.append(1)
         else:
             y.append(0)
 
         # Append number of cards that are the same colour as card1
-        colours.append(pick.colourInPool[card1Colour])
-
-        sumOfCards = 0
-        for cardName in substitutesList:
-            if cardName in pick.numCardInPool:
-                sumOfCards += pick.numCardInPool[cardName]
-        # Also count card1 as a substitute for itself.
-        sumOfCards += pick.numCardInPool[card1]
-
-        # TODO: Include number of card1 in pool as separate exog
-        
-        for i in sumCards.keys():
-            if sumOfCards == i:
-                sumCards[i].append(1)
+        if colour:
+            if card1Colour in pick.colourInPool:
+                colours.append(pick.colourInPool[card1Colour])
             else:
-                sumCards[i].append(0)
+                colours.append(0)
 
+        substitutesCount = 0
+        # Count total number of substitutes in the pool
+        for cardName in substitutesList:
+            cardNum = cardNumsHash[cardName]
+            if cardNum in pick.numCardInPool:
+                substitutesCount += pick.numCardInPool[cardNum]
+                break
+
+        for i in numSubstitutes.keys():
+            if substitutesCount == i:
+                numSubstitutes[i].append(1)
+            else:
+                numSubstitutes[i].append(0)
+
+        # Control for the number of card1 in the pool
+        card1Num = cardNumsHash[card1]
+        if card1Num in pick.numCardInPool:
+            card1InPool.append(pick.numCardInPool[card1Num])
+        else:
+            card1InPool.append(0)
+        
 
     # Eliminate values that didn't have enough observations
     threshold = 40
     temp = {}
     for i in range(0, num_multiples + 1):
-        if sum(sumCards[i]) < threshold:
+        if sum(numSubstitutes[i]) < threshold:
             print(f"Not enough observations with {i} cards in the pool.")
             print("Will eliminate all higher values")
             break
         else:
-            temp[i] = sumCards[i]
+            temp[i] = numSubstitutes[i]
 
-    sumCards = temp
+    numSubstitutes = temp
 
     endog = np.array(y)
-
+    
     # Assemble exog matrix
-    exog = np.array([])
+    exog = None
+
     if colour:
         exog = np.array(colours)
+        exog = np.column_stack((exog, card1InPool))
+    else:
+        exog = np.array(card1InPool)
 
-    for i in sumCards.keys():
-        exog = np.column_stack((exog, sumCards[i]))
+    # Add the number of substitutes in the pool
+    for i in numSubstitutes.keys():
+        exog = np.column_stack((exog, numSubstitutes[i]))
 
     # Add a constant term
     exog = sm.add_constant(exog)
@@ -800,7 +827,9 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=True):
     if colour:
         labels.append("Same colour cards in pool")
 
-    for i in sumCards.keys():
+    labels.append(f"{card1} in pool")
+
+    for i in numSubstitutes.keys():
         labels.append(f"{i} substitutes")
 
     model.exog_names[:] = labels
@@ -810,20 +839,41 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=True):
     # Check whether the number of substitutes coefficients are decreasing
     # If so, the cards are said to be substitutes
     substitute = True
-    for i in range(1, num_multiples + 1):
-        if results.params[i + 1] > results.params[i + 2]:
+    indexOfZeroSubstitutes = 2
+    if colour:
+        indexOfZeroSubstitutes += 1
+    
+    for i in range(indexOfZeroSubstitutes, len(numSubstitutes.keys()) + 1):
+        if results.params[i] < results.params[i + 1]:
             substitute = False
+
+    # If the parameter increases from 0 to 1, and then drops off,
+    # this is said to be an inferior substitute
+    # Players like to have 1 of each for variety,
+    # But view the cards as filling the same role
+    # So this effect disappears after players have 1 of each
+    indexOfOneSubstitute = 3
+    if colour:
+        indexOfOneSubstitute += 1
+    inferiorSubstitute = True
+    # ignore the last value
+    for i in range(indexOfOneSubstitute, len(numSubstitutes.keys())):
+        print(f"{labels[i + 1 ]} - {labels[i]} = {results.params[i + 1 ] - results.params[i]}")
+        if results.params[i] < results.params[i + 1]:
+            inferiorSubstitute = False
 
     # TODO:
     # Check here if the coeffecients decrease for a while, and then start increasing
     # Threshold effect
 
+    print(results.summary())
+
     if substitute:
         print(f"{card1} and {substitutesList} are substitutes")
+    elif inferiorSubstitute:
+        print(f"{substitutesList} are inferior substitutes for {card1}")
     else:
         print(f"{card1} and {substitutesList} are not substitutes")
-
-    print(results.summary())
 
 
 def regressOnNumCard2(card1, card2, drafts, card_data):
@@ -962,6 +1012,9 @@ GET_DRAFTS_FROM_CACHE = False
 
 drafts = []
 
+# Take a timestamp
+timestamp = time.time()
+
 if GET_DRAFTS_FROM_CACHE:
     drafts = getDraftsFromCache()
 else:
@@ -970,6 +1023,9 @@ else:
     # Use pickle to cache
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
         pickle.dump(drafts, f)
+
+# Print time to parse drafts
+print(f"Time to parse drafts: {time.time() - timestamp}")
 
 card_data = {}
 card_data = getCardData()
@@ -988,13 +1044,23 @@ blackRemoval = ["Claim the Precious",
 # Red / Black removal spells
 redBlackRemoval = redRemoval + blackRemoval
 
-computeDraftStats(redBlackRemoval, drafts)
+timestamp = time.time()
 
-#checkSubstitution("Smite the Deathless", ["Improvised Club"])
+#computeDraftStats(redBlackRemoval, drafts)
+computeDraftStats(["Improvised Club", "Smite the Deathless", "Erebor Flamesmith", "Goblin Fireleaper",
+                   "Battle-Scarred Goblin", 'Rally at the Hornburg'], drafts)
+# pickle to drafts cache
+#with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
+    #pickle.dump(drafts, f)
+
+print(f"Time to compute draft stats: {time.time() - timestamp}")
+
+checkSubstitution("Rally at the Hornburg", ["Smite the Deathless"])
+checkSubstitution("Smite the Deathless", ["Rally at the Hornburg"])
 #checkSubstitution("Improvised Club", ["Smite the Deathless"])
 
 #checkSubstitution("Improvised Club", redRemoval)
-checkSubstitution("Smite the Deathless", redRemoval)
+#checkSubstitution("Smite the Deathless", redRemoval)
 exit()
 
 checkSubstitution("Smite the Deathless", redBlackRemoval, colour=False)
