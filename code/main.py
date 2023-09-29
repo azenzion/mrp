@@ -7,6 +7,7 @@ from filecache import filecache
 from statistics import mean
 import numpy as np
 import statsmodels.api as sm
+import math
 
 
 csv_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "draft_data_public.LTR.PremierDraft.csv")
@@ -668,7 +669,7 @@ def computeDraftStats(cardNames, drafts):
 
             pickName = cardNamesHash[pick.pick]
 
-            draftPool.append(pickName)
+            
 
             # initialize values
             for cardName in cardNames:
@@ -706,6 +707,8 @@ def computeDraftStats(cardNames, drafts):
                     if cardName == pick.pick:
                         card.timesPicked += 1
 
+            # Add the pick to the pool
+            draftPool.append(pickName)
 
     return card_data
     
@@ -732,8 +735,33 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
+def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour=True, checkCard2Colour=True):
     print(f"Checking substitution for {card1}, among substitutes {substitutesList}")
+
+    # Keep a running total for indexes
+    # Constant term
+    # number of card1 in pool
+    numControls = 2
+
+    card1Obj = getCardFromCardName(card1, card_data)
+    card1Colour = card1Obj.colour
+
+    card2Obj = None
+    card2Colour = None
+
+    if checkCard1Colour:
+        numControls += 1
+
+    if checkCard2Colour:
+        card2Obj = getCardFromCardName(substitutesList[0], card_data)
+        card2Colour = card2Obj.colour
+
+        if card1Colour == card2Colour:
+            print(f"Card 1 and card 2 are the same colour: {card1Colour}")
+            print("Will not check for card 2 colour")
+            checkCard2Colour = False
+        else:
+            numControls += 1
 
     # Remove card1 from the list of substitutes
     # This is so we don't accidentally double count
@@ -741,16 +769,14 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
         substitutesList.remove(card1)
 
     y = []
-    colours = []
+    card1ColourCount = []
     card1InPool = []
 
+    card2ColourCount = []
     numSubstitutes = {}
 
     for i in range(num_multiples + 1):
         numSubstitutes[i] = []
-
-    card1Obj = getCardFromCardName(card1, card_data)
-    card1Colour = card1Obj.colour
 
     for pick in card1Obj.picks:
         pickName = cardNamesHash[pick.pick]
@@ -761,11 +787,26 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
             y.append(0)
 
         # Append number of cards that are the same colour as card1
-        if colour:
-            if card1Colour in pick.colourInPool:
-                colours.append(pick.colourInPool[card1Colour])
-            else:
-                colours.append(0)
+        if checkCard1Colour:
+            card1ColourTotal = 0
+            for colourOfCard in pick.colourInPool.keys():
+                if card1Colour in colourOfCard:
+                    card1ColourTotal += pick.colourInPool[colourOfCard]
+
+            # Take the log of the number of cards
+            # This is to account for diminishing returns
+            card1ColourTotal = math.log(card1ColourTotal + 1)
+            card1ColourCount.append(card1ColourTotal)
+
+        if checkCard2Colour:
+            card2ColourTotal = 0
+            for colourOfCard in pick.colourInPool.keys():
+                if card2Colour in colourOfCard:
+                    card2ColourTotal += pick.colourInPool[colourOfCard]
+            # Take the log of the number of cards
+            # This is to account for diminishing returns
+            card2ColourTotal = math.log(card2ColourTotal + 1)
+            card2ColourCount.append(card2ColourTotal)
 
         substitutesCount = 0
         # Count total number of substitutes in the pool
@@ -807,8 +848,12 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
     # Assemble exog matrix
     exog = None
 
-    if colour:
-        exog = np.array(colours)
+    if checkCard1Colour:
+        exog = np.array(card1ColourCount)
+
+        if checkCard2Colour:
+            exog = np.column_stack((exog, card2ColourCount))
+
         exog = np.column_stack((exog, card1InPool))
     else:
         exog = np.array(card1InPool)
@@ -824,8 +869,10 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
 
     # Label the variables in the model
     labels = ["Constant"]
-    if colour:
-        labels.append("Same colour cards in pool")
+    if checkCard1Colour:
+        labels.append(f"{card1Colour} cards in pool")
+    if checkCard2Colour:
+        labels.append(f"{card2Colour} cards in pool")
 
     labels.append(f"{card1} in pool")
 
@@ -839,9 +886,7 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
     # Check whether the number of substitutes coefficients are decreasing
     # If so, the cards are said to be substitutes
     substitute = True
-    indexOfZeroSubstitutes = 2
-    if colour:
-        indexOfZeroSubstitutes += 1
+    indexOfZeroSubstitutes = numControls
     
     for i in range(indexOfZeroSubstitutes, len(numSubstitutes.keys()) + 1):
         if results.params[i] < results.params[i + 1]:
@@ -852,12 +897,12 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
     # Players like to have 1 of each for variety,
     # But view the cards as filling the same role
     # So this effect disappears after players have 1 of each
-    indexOfOneSubstitute = 3
-    if colour:
+    indexOfOneSubstitute = numControls + 1
+    if card1Colour:
         indexOfOneSubstitute += 1
     inferiorSubstitute = True
     # ignore the last value
-    for i in range(indexOfOneSubstitute, len(numSubstitutes.keys())):
+    for i in range(indexOfOneSubstitute, len(numSubstitutes.keys()) + 1):
         print(f"{labels[i + 1 ]} - {labels[i]} = {results.params[i + 1 ] - results.params[i]}")
         if results.params[i] < results.params[i + 1]:
             inferiorSubstitute = False
@@ -875,10 +920,22 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, colour=False):
     else:
         print(f"{card1} and {substitutesList} are not substitutes")
 
+    # Calculate the elasticity of substitution
+    # This is the coefficient for 2 substitutes in pool
+    # minus the coefficient for 1 substitute in pool
+    try:
+        elasticity = results.params[indexOfZeroSubstitutes + 2] - results.params[indexOfZeroSubstitutes + 1]
+    except:
+        elasticity = 999
+
+    print(f"elasticity: {elasticity}")
+
+    return elasticity
+
 
 def regressOnNumCard2(card1, card2, drafts, card_data):
 
-    card_data = computeDraftStats(card1, card2, drafts)
+    #card_data = computeDraftStats(card1, card2, drafts)
 
     y = []
     colours = []
@@ -1008,12 +1065,13 @@ for i in range(NUM_CARDS_IN_SET):
     cardNamesHash[i] = ltr_cards[i]
     cardNumsHash[ltr_cards[i]] = i
 
-GET_DRAFTS_FROM_CACHE = False
+GET_DRAFTS_FROM_CACHE = True
 
 drafts = []
 
 # Take a timestamp
 timestamp = time.time()
+
 
 if GET_DRAFTS_FROM_CACHE:
     drafts = getDraftsFromCache()
@@ -1030,43 +1088,44 @@ print(f"Time to parse drafts: {time.time() - timestamp}")
 card_data = {}
 card_data = getCardData()
 
-redRemoval = ["Smite the Deathless",
-            "Improvised Club",
-            "Fear, Fire, Foes!",
-            "Foray of Orcs",
-            "Breaking of the Fellowship", 
-            "Spiteful Banditry"]
+# Get red cards
+redCards = []
+for card in card_data.values():
+    if "R" in card.colour:
+        redCards.append(card.name)
 
-blackRemoval = ["Claim the Precious",
-                "Bitter Downfall",
-                 "Gollum's Bite"]
+redPairs = []
+for card1 in redCards:
+    for card2 in redCards:
+        if card1 != card2:
+            redPairs.append((card1, card2))
 
-# Red / Black removal spells
-redBlackRemoval = redRemoval + blackRemoval
+# Compute the number of pairs
+numPairs = len(redPairs)
+print(f"Number of pairs: {numPairs}")
+
 
 timestamp = time.time()
-
-#computeDraftStats(redBlackRemoval, drafts)
-computeDraftStats(["Improvised Club", "Smite the Deathless", "Erebor Flamesmith", "Goblin Fireleaper",
-                   "Battle-Scarred Goblin", 'Rally at the Hornburg'], drafts)
-# pickle to drafts cache
-#with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
-    #pickle.dump(drafts, f)
-
+computeDraftStats(redCards, drafts)
 print(f"Time to compute draft stats: {time.time() - timestamp}")
 
-checkSubstitution("Rally at the Hornburg", ["Smite the Deathless"])
-checkSubstitution("Smite the Deathless", ["Rally at the Hornburg"])
-#checkSubstitution("Improvised Club", ["Smite the Deathless"])
+# Calculate the substitutability of each pair
+substitutability = {}
+for card1, card2 in redPairs:
+    substitutability[card1, card2] = checkSubstitution(card1, [card2], num_multiples=10, checkCard1Colour=True, checkCard2Colour=True)
 
-#checkSubstitution("Improvised Club", redRemoval)
-#checkSubstitution("Smite the Deathless", redRemoval)
+# Sort the pairs by substitutability
+sortedPairs = sorted(substitutability.items(), key=lambda x: x[1], reverse=True)
+# pickle dump
+with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutability.pickle"), "wb") as f:
+    pickle.dump(sortedPairs, f)
+
+# Print the pairs
+for pair in sortedPairs:
+    print(f"{pair[0][0]} and {pair[0][1]}: {pair[1]}")
+
 exit()
 
-checkSubstitution("Smite the Deathless", redBlackRemoval, colour=False)
-                       
-
-exit()
 
 # Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
 
