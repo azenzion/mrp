@@ -23,6 +23,9 @@ OPTIMIZE_STORAGE = True
 cardNamesHash = {}
 cardNumsHash= {}
 
+redRemoval = ["Fear, Fire, Foes!", "Smite the Deathless", "Improvised Club", "Foray of Orcs",
+              "Cast into the Fire", "Breaking of the Fellowship", "Spiteful Banditry"]
+
 
 def getColours():
     COLOURS = ['W', 'U', 'B', 'R', 'G', '']
@@ -304,6 +307,7 @@ def countSubstitutes(drafts, card1, card2):
 
 def parseDrafts(csv_file_path, ltr_cards, numDrafts=1000):
     csv_reader = None
+    print('begin parsing draft data')
     with open(csv_file_path, "r") as f:
         # Create a CSV reader
         csv_reader = csv.reader(f, delimiter=",")
@@ -712,7 +716,52 @@ def computeDraftStats(cardNames, drafts):
 
     return card_data
     
-                
+def checkIfSubstitutes(results, numControls, labels):
+    # Use large value where we can't calculate
+    elasticity = 999
+
+    indexOfOneSubstitute = numControls
+    indexOfTwoSubstitutes = numControls + 1
+
+    try:
+            
+        print(f"Calculating {labels[indexOfTwoSubstitutes]} - {labels[indexOfTwoSubstitutes]}")
+        elasticity = results.params[indexOfTwoSubstitutes] - results.params[indexOfOneSubstitute]
+        print(f"Elasticity of substitution: {elasticity}")
+        if elasticity < 0:
+            return True, elasticity
+        else:
+            return False, elasticity
+    except:
+        return False, elasticity
+
+    """
+    # Check whether the number of substitutes coefficients are decreasing
+    # If so, the cards are said to be substitutes
+    substitute = True
+    # The index of the indicator variables for 0 substitutes in pool and one substitute in pool
+    indexOfZeroSubstitutes = numControls
+    indexOfOneSubstitute = numControls + 1
+    
+    for i in range(indexOfZeroSubstitutes, len(numSubstitutes.keys()) + 1):
+        if results.params[i] < results.params[i + 1]:
+            substitute = False
+
+    # If the parameter increases from 0 to 1, and then drops off,
+    # this is said to be an inferior substitute
+    # Players like to have 1 of each for variety,
+    # But view the cards as filling the same role
+    # So this effect disappears after players have 1 of each
+    inferiorSubstitute = True
+    # ignore the last value
+    for i in range(indexOfOneSubstitute, len(numSubstitutes.keys()) + 1):
+        if results.params[i] < results.params[i + 1]:
+            inferiorSubstitute = False
+
+    # TODO:
+    # Check here if the coeffecients decrease for a while, and then start increasing
+    # Threshold effect
+    """      
 
 
 # for picks where poth cards were present
@@ -735,13 +784,19 @@ def computePairPickRates(pairs, drafts):
 
     return pairsWithPickRates
 
-def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour=True, checkCard2Colour=True):
+def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour=True, checkCard2Colour=False):
     print(f"Checking substitution for {card1}, among substitutes {substitutesList}")
 
+    # Allow function to take a single substitute
+    if type(substitutesList) == str:
+        substitutesList = [substitutesList]
+
     # Keep a running total for indexes
+    numControls = 0
     # Constant term
+    numControls += 1
     # number of card1 in pool
-    numControls = 2
+    numControls += 1
 
     card1Obj = getCardFromCardName(card1, card_data)
     card1Colour = card1Obj.colour
@@ -757,9 +812,11 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour
         card2Colour = card2Obj.colour
 
         if card1Colour == card2Colour:
-            print(f"Card 1 and card 2 are the same colour: {card1Colour}")
-            print("Will not check for card 2 colour")
             checkCard2Colour = False
+
+            if debug:
+                print(f"Card 1 and card 2 are the same colour: {card1Colour}")
+                print("Will not check for card 2 colour")
         else:
             numControls += 1
 
@@ -833,7 +890,7 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour
     # Eliminate values that didn't have enough observations
     threshold = 40
     temp = {}
-    for i in range(0, num_multiples + 1):
+    for i in range(1, num_multiples + 1):
         if sum(numSubstitutes[i]) < threshold:
             print(f"Not enough observations with {i} cards in the pool.")
             print("Will eliminate all higher values")
@@ -876,59 +933,25 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour
 
     labels.append(f"{card1} in pool")
 
-    for i in numSubstitutes.keys():
-        labels.append(f"{i} substitutes")
+    if len(substitutesList) == 1:
+        for i in numSubstitutes.keys():
+            labels.append(f"{i} {substitutesList[0]} in pool")
+    else: 
+        for i in numSubstitutes.keys():
+            labels.append(f"{i} substitutes in pool")
 
     model.exog_names[:] = labels
 
     results = model.fit()
 
-    # Check whether the number of substitutes coefficients are decreasing
-    # If so, the cards are said to be substitutes
-    substitute = True
-    indexOfZeroSubstitutes = numControls
-    
-    for i in range(indexOfZeroSubstitutes, len(numSubstitutes.keys()) + 1):
-        if results.params[i] < results.params[i + 1]:
-            substitute = False
-
-    # If the parameter increases from 0 to 1, and then drops off,
-    # this is said to be an inferior substitute
-    # Players like to have 1 of each for variety,
-    # But view the cards as filling the same role
-    # So this effect disappears after players have 1 of each
-    indexOfOneSubstitute = numControls + 1
-    if card1Colour:
-        indexOfOneSubstitute += 1
-    inferiorSubstitute = True
-    # ignore the last value
-    for i in range(indexOfOneSubstitute, len(numSubstitutes.keys()) + 1):
-        print(f"{labels[i + 1 ]} - {labels[i]} = {results.params[i + 1 ] - results.params[i]}")
-        if results.params[i] < results.params[i + 1]:
-            inferiorSubstitute = False
-
-    # TODO:
-    # Check here if the coeffecients decrease for a while, and then start increasing
-    # Threshold effect
+    substitutes, elasticity = checkIfSubstitutes(results, numControls, labels)
 
     print(results.summary())
 
-    if substitute:
+    if substitutes:
         print(f"{card1} and {substitutesList} are substitutes")
-    elif inferiorSubstitute:
-        print(f"{substitutesList} are inferior substitutes for {card1}")
     else:
         print(f"{card1} and {substitutesList} are not substitutes")
-
-    # Calculate the elasticity of substitution
-    # This is the coefficient for 2 substitutes in pool
-    # minus the coefficient for 1 substitute in pool
-    try:
-        elasticity = results.params[indexOfZeroSubstitutes + 2] - results.params[indexOfZeroSubstitutes + 1]
-    except:
-        elasticity = 999
-
-    print(f"elasticity: {elasticity}")
 
     return elasticity
 
@@ -1065,7 +1088,7 @@ for i in range(NUM_CARDS_IN_SET):
     cardNamesHash[i] = ltr_cards[i]
     cardNumsHash[ltr_cards[i]] = i
 
-GET_DRAFTS_FROM_CACHE = True
+GET_DRAFTS_FROM_CACHE = False
 
 drafts = []
 
@@ -1074,6 +1097,7 @@ timestamp = time.time()
 
 
 if GET_DRAFTS_FROM_CACHE:
+    print("Reading drafts from cache")
     drafts = getDraftsFromCache()
 else:
     drafts = parseDrafts(csv_file_path, ltr_cards, num_drafts)
@@ -1110,22 +1134,19 @@ computeDraftStats(redCards, drafts)
 print(f"Time to compute draft stats: {time.time() - timestamp}")
 
 # Calculate the substitutability of each pair
-substitutability = {}
-for card1, card2 in redPairs:
-    substitutability[card1, card2] = checkSubstitution(card1, [card2], num_multiples=10, checkCard1Colour=True, checkCard2Colour=True)
+#substitutability = {}
+#for card1, card2 in redPairs:
+#    substitutability[card1, card2] = checkSubstitution(card1, [card2], num_multiples=10, checkCard1Colour=True, checkCard2Colour=True)
 
 # Sort the pairs by substitutability
-sortedPairs = sorted(substitutability.items(), key=lambda x: x[1], reverse=True)
+#sortedPairs = sorted(substitutability.items(), key=lambda x: x[1], reverse=True)
 # pickle dump
-with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutability.pickle"), "wb") as f:
-    pickle.dump(sortedPairs, f)
+#with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutability.pickle"), "wb") as f:
+#    pickle.dump(sortedPairs, f)
 
 # Print the pairs
-for pair in sortedPairs:
-    print(f"{pair[0][0]} and {pair[0][1]}: {pair[1]}")
-
-exit()
-
+#for pair in sortedPairs:
+#    print(f"{pair[0][0]} and {pair[0][1]}: {pair[1]}")
 
 # Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
 
@@ -1134,39 +1155,48 @@ rallySubs = []
 rallyComps = []
 smiteSubs = []
 smiteComps = []
-for cardName in card_data.keys():
 
-    # Only red cards for now
-    if card_data[cardName].colour != "R":
-        continue
+for card in redCards:
 
-    if regressOnNumCard2(cardName, "Rally at the Hornburg", drafts, card_data):
-    #if regression("Rally at the Hornburg", cardName, drafts, card_data):
-        rallySubs.append(cardName)
+    #rallyElasticity = checkSubstitution("Rally at the Hornburg", card, num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
+    #smiteElasticity = checkSubstitution("Smite the Deathless", card, num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
+
+    rallyElasticity = checkSubstitution(card, "Rally at the Hornburg", num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
+    smiteElasticity = checkSubstitution(card, "Smite the Deathless", num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
+
+    if rallyElasticity < 0:
+        rallySubs.append((card, rallyElasticity))
     else:
-        rallyComps.append(cardName)
-    if regressOnNumCard2(cardName, "Smite the Deathless", drafts, card_data):
-    #if regression("Smite the Deathless", cardName, drafts, card_data):
-        smiteSubs.append(cardName)
+        rallyComps.append((card, rallyElasticity))
+
+    if smiteElasticity < 0:
+        smiteSubs.append((card, smiteElasticity))
     else:
-        smiteComps.append(cardName)
+        smiteComps.append((card, smiteElasticity))
+
+
 
 print(f"Number of substitutes for Rally at the Hornburg: {len(rallySubs)}")
 print(f"Number of substitutes for Smite the Deathless: {len(smiteSubs)}")
 
-# Print what the substitutes are
+# Print what the substitutes are and their elasticity
+# Sorted by their elasticity
+rallySubs = sorted(rallySubs, key=lambda x: x[1], reverse=True)
+smiteSubs = sorted(smiteSubs, key=lambda x: x[1], reverse=True)
+
 print("Substitutes for Rally at the Hornburg:")
 for cardName in rallySubs:
     print(cardName)
 
 print("\n========================\n")
 
-
 print("Substitutes for Smite the Deathless:")
 for cardName in smiteSubs:
     print(cardName)
 
 print("\n========================\n")
+
+exit()
 
 
 # For each card, sum the times seen for all its substitutes
