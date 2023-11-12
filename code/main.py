@@ -16,7 +16,7 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__), "..", "data", "ltr_
 # TODO: Better naming conventions for cache files
 debug = False
 
-num_drafts = 100000
+num_drafts = 10000
 
 OPTIMIZE_STORAGE = True
 
@@ -670,10 +670,7 @@ def computeDraftStats(cardNames, drafts):
         draftPool = []
 
         for pick in draft.picks:
-
             pickName = cardNamesHash[pick.pick]
-
-            
 
             # initialize values
             for cardName in cardNames:
@@ -717,51 +714,73 @@ def computeDraftStats(cardNames, drafts):
     return card_data
     
 def checkIfSubstitutes(results, numControls, labels):
-    # Use large value where we can't calculate
-    elasticity = 999
 
     indexOfOneSubstitute = numControls
     indexOfTwoSubstitutes = numControls + 1
 
-    try:
-            
+    elasticity = 0.0
+
+    # Total number of observations
+    totalNobs = 0
+
+
+    # Number of observations for each number of substitutes
+    # This is the number that we want out of nObs
+    j = 0
+    for i in range(indexOfOneSubstitute, len(results.params) - 1):
+        j += 1
         print(f"Calculating {labels[indexOfTwoSubstitutes]} - {labels[indexOfTwoSubstitutes]}")
-        elasticity = results.params[indexOfTwoSubstitutes] - results.params[indexOfOneSubstitute]
-        print(f"Elasticity of substitution: {elasticity}")
-        if elasticity < 0:
-            return True, elasticity
-        else:
-            return False, elasticity
-    except:
+
+        nextIdx = i + 1
+
+        elasticity = results.params[nextIdx] - results.params[indexOfOneSubstitute]
+
+        #multiply by the number of observations at that number
+
+        elasticity *= results.nobs[j]
+
+        totalNobs += results.nobs[j]
+
+        
+    if totalNobs == 0:
+        print('Not enough observations to calculate elasticity of substitution')
+        return False, 999
+    
+    # divide by totalNobs
+    elasticity /= totalNobs
+        
+    print(f"Elasticity of substitution: {elasticity}")
+
+    if elasticity < 0:
+        return True, elasticity
+    else:
         return False, elasticity
 
-    """
-    # Check whether the number of substitutes coefficients are decreasing
-    # If so, the cards are said to be substitutes
-    substitute = True
-    # The index of the indicator variables for 0 substitutes in pool and one substitute in pool
-    indexOfZeroSubstitutes = numControls
-    indexOfOneSubstitute = numControls + 1
-    
-    for i in range(indexOfZeroSubstitutes, len(numSubstitutes.keys()) + 1):
-        if results.params[i] < results.params[i + 1]:
-            substitute = False
 
-    # If the parameter increases from 0 to 1, and then drops off,
-    # this is said to be an inferior substitute
-    # Players like to have 1 of each for variety,
-    # But view the cards as filling the same role
-    # So this effect disappears after players have 1 of each
-    inferiorSubstitute = True
-    # ignore the last value
-    for i in range(indexOfOneSubstitute, len(numSubstitutes.keys()) + 1):
-        if results.params[i] < results.params[i + 1]:
-            inferiorSubstitute = False
 
-    # TODO:
-    # Check here if the coeffecients decrease for a while, and then start increasing
-    # Threshold effect
-    """      
+def findTopSubstitutes(cardName, cards):
+    # Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
+    substitutes = []
+    complements = []
+
+    for card in cards:
+        elasticity = checkSubstitution(card, cardName, num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
+
+        if elasticity < 0:
+            substitutes.append((card, elasticity))
+        else:
+            complements.append((card, elasticity))
+
+    print(f"Number of substitutes for {cardName}: {len(substitutes)}")
+
+    # Print what the substitutes are and their elasticity
+    # Sorted by their elasticity
+    substitutes = sorted(substitutes, key=lambda x: x[1], reverse=True)
+
+    for substitute in substitutes:
+        print(f"{substitute[0]}: {substitute[1]}")
+
+    return substitutes, complements
 
 
 # for picks where poth cards were present
@@ -890,8 +909,12 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour
     # Eliminate values that didn't have enough observations
     threshold = 40
     temp = {}
+    numObservations = []
     for i in range(1, num_multiples + 1):
-        if sum(numSubstitutes[i]) < threshold:
+        totalObservations = sum(numSubstitutes[i])
+        numObservations.append(totalObservations)
+
+        if totalObservations < threshold:
             print(f"Not enough observations with {i} cards in the pool.")
             print("Will eliminate all higher values")
             break
@@ -944,9 +967,11 @@ def checkSubstitution(card1, substitutesList, num_multiples=10, checkCard1Colour
 
     results = model.fit()
 
-    substitutes, elasticity = checkIfSubstitutes(results, numControls, labels)
+    # append total observations at each number to the results
+    # We use this to calculate our elasticity of substitution
+    results.nobs = numObservations
 
-    print(results.summary())
+    substitutes, elasticity = checkIfSubstitutes(results, numControls, labels)
 
     if substitutes:
         print(f"{card1} and {substitutesList} are substitutes")
@@ -1095,7 +1120,6 @@ drafts = []
 # Take a timestamp
 timestamp = time.time()
 
-
 if GET_DRAFTS_FROM_CACHE:
     print("Reading drafts from cache")
     drafts = getDraftsFromCache()
@@ -1128,105 +1152,80 @@ for card1 in redCards:
 numPairs = len(redPairs)
 print(f"Number of pairs: {numPairs}")
 
-
 timestamp = time.time()
 computeDraftStats(redCards, drafts)
 print(f"Time to compute draft stats: {time.time() - timestamp}")
 
-# Calculate the substitutability of each pair
-#substitutability = {}
-#for card1, card2 in redPairs:
-#    substitutability[card1, card2] = checkSubstitution(card1, [card2], num_multiples=10, checkCard1Colour=True, checkCard2Colour=True)
+# Compute the substitutes for a card within a list of cards
+rallySubs, rallyComps = findTopSubstitutes("Rally at the Hornburg", redCards)
+smiteSubs, smiteComps = findTopSubstitutes("Smite the Deathless", redCards)
 
-# Sort the pairs by substitutability
-#sortedPairs = sorted(substitutability.items(), key=lambda x: x[1], reverse=True)
-# pickle dump
-#with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutability.pickle"), "wb") as f:
-#    pickle.dump(sortedPairs, f)
-
-# Print the pairs
-#for pair in sortedPairs:
-#    print(f"{pair[0][0]} and {pair[0][1]}: {pair[1]}")
-
-# Count the number of substitutes for Rally at the Hornburg and Smite the Deathless
-
-
-rallySubs = []
-rallyComps = []
-smiteSubs = []
-smiteComps = []
-
-for card in redCards:
-
-    #rallyElasticity = checkSubstitution("Rally at the Hornburg", card, num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
-    #smiteElasticity = checkSubstitution("Smite the Deathless", card, num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
-
-    rallyElasticity = checkSubstitution(card, "Rally at the Hornburg", num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
-    smiteElasticity = checkSubstitution(card, "Smite the Deathless", num_multiples=10, checkCard1Colour=True, checkCard2Colour=False)
-
-    if rallyElasticity < 0:
-        rallySubs.append((card, rallyElasticity))
-    else:
-        rallyComps.append((card, rallyElasticity))
-
-    if smiteElasticity < 0:
-        smiteSubs.append((card, smiteElasticity))
-    else:
-        smiteComps.append((card, smiteElasticity))
-
-
-
+# print the total number of substitutes for each
 print(f"Number of substitutes for Rally at the Hornburg: {len(rallySubs)}")
 print(f"Number of substitutes for Smite the Deathless: {len(smiteSubs)}")
 
-# Print what the substitutes are and their elasticity
-# Sorted by their elasticity
-rallySubs = sorted(rallySubs, key=lambda x: x[1], reverse=True)
-smiteSubs = sorted(smiteSubs, key=lambda x: x[1], reverse=True)
+# Eliminate the substitutes with substitution elasticity > -0.005
+# This is to eliminate cards that are not substitutes
 
-print("Substitutes for Rally at the Hornburg:")
-for cardName in rallySubs:
-    print(cardName)
+# Eliminate the substitutes with elasticity > -0.005
 
-print("\n========================\n")
+rallySubs = [x for x in rallySubs if x[1] < -0.005]
+smiteSubs = [x for x in smiteSubs if x[1] < -0.005]
 
-print("Substitutes for Smite the Deathless:")
-for cardName in smiteSubs:
-    print(cardName)
+# Remove rares and mythic rares
+rallySubs = [x for x in rallySubs if card_data[x[0]].rarity != "R" and card_data[x[0]].rarity != "M"]
+smiteSubs = [x for x in smiteSubs if card_data[x[0]].rarity != "R" and card_data[x[0]].rarity != "M"]
 
-print("\n========================\n")
+# Print the number of substitutes after eliminating
+print(f"Number of substitutes for Rally at the Hornburg after eliminating: {len(rallySubs)}")
+print(f"Number of substitutes for Smite the Deathless after eliminating: {len(smiteSubs)}")
+
+print("=====================================")
+
+# Print each substitute and its elasticity
+print("Rally at the Hornburg substitutes")
+for substitute in rallySubs:
+    print(f"{substitute[0]}: {substitute[1]}")
+
+print("=====================================")
+print("Smite the Deathless substitutes")
+for substitute in smiteSubs:
+    print(f"{substitute[0]}: {substitute[1]}")
+
+
+# For the substitutes of each, 
+# add up the number of times you see the substitutes
+# Compare Smite and Rally to determine which has more substitutes
+
+
+
+# Compute the number of times you see each substitute
+
+smiteSubsCount = 0 
+smiteSubsWeighted = 0
+for smiteSub in smiteSubs:
+    smiteSubName = smiteSub[0]
+    smiteSubElas = smiteSub[1]
+
+    smiteSubsCount += card_data[smiteSubName].numberSeen
+    smiteSubsWeighted += card_data[smiteSubName].numberSeen * smiteSubElas
+
+rallySubsCount = 0
+rallySubsWeighted = 0
+for rallySub in rallySubs:
+    rallySubName = rallySub[0]
+    rallySubElas = rallySub[1]
+
+    rallySubsCount += card_data[rallySubName].numberSeen 
+    rallySubsWeighted += card_data[rallySubName].numberSeen * rallySubElas
+
+print(f"Number of times you see Rally substitutes: {rallySubsCount}")
+print(f"Number of times you see Smite substitutes: {smiteSubsCount}")
+
+print(f"Weighted number of times you see Rally substitutes: {rallySubsWeighted}")
+print(f"Weighted number of times you see Smite substitutes: {smiteSubsWeighted}")
 
 exit()
-
-
-# For each card, sum the times seen for all its substitutes
-print("Number of rally substitutes seen:")
-numSeen = 0
-for cardName in rallySubs:
-    numSeen += card_data[cardName].numberSeen
-print(numSeen)
-
-print("Number of smite substitutes seen:")
-numSeen = 0
-for cardName in smiteSubs:
-    numSeen += card_data[cardName].numberSeen
-print(numSeen)
-
-
-
-exit()
-
-
-
-# Generate all the pairs of red cards
-redCards = []
-for card in card_data.values():
-    if card.colour == "R":
-        redCards.append(card.name)
-
-# Compute the number of pairs
-numPairs = len(redCards) * (len(redCards) - 1) / 2
-print(f"Number of pairs: {numPairs}")
 
 # Compute the number of pairs where card2 is a substitute for card1
 numSubstitutes = 0
