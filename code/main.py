@@ -23,7 +23,7 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__),
 
 debug = False
 
-num_drafts = 100000
+num_drafts = 10000
 
 # The number of multiples in the pool to consider
 # This just needs to be larger than we're likely to see
@@ -530,7 +530,7 @@ def pickRateColour(packCardName, drafts, num_cards=1):
 
 
 def parsePoolInfo(cardNames, drafts):
-
+    timestamp = time.time()
     print(f"Computing draft stats for {cardNames}")
 
     for draft in drafts:
@@ -579,6 +579,8 @@ def parsePoolInfo(cardNames, drafts):
 
             # Add the pick to the pool
             draftPool.append(pickName)
+
+    print(f"Time to parse pool info: {time.time() - timestamp}")
 
     return card_data
 
@@ -660,7 +662,6 @@ def check_if_substitutes(results,
                          labels,
                          num_obs={}):
     debug = True
-
     one_sub_idx = num_controls
     elasticity = 0.0
 
@@ -826,7 +827,6 @@ def elasticity_substitution(card1,
                             pick_number=False,
                             check_card1_in_pool=False,
                             ):
-    debug = True
 
     if debug:
         print(f"Checking substitution for {card1}")
@@ -871,6 +871,13 @@ def elasticity_substitution(card1,
 
     if check_card2_colour:
         num_controls += 1
+
+    if check_card1_in_pool:
+        num_controls += 1
+    else:
+        # If we're not checking whether card1 is in the pool
+        # Add card1 to the list of substitutes
+        subs_list.append(card1)
 
     # This is our dependent variable
     # 1 if card1 was picked, 0 otherwise
@@ -971,27 +978,12 @@ def elasticity_substitution(card1,
                                                    labels,
                                                    num_observations)
 
-    debug = True
-
     if debug:
         if substitutes:
             print(f"{card1} and {subs_list} are substitutes")
         else:
             print(f"{card1} and {subs_list} are not substitutes")
 
-        print(results.summary())
-
-        # Graph the results
-        # Plot the residuals
-        fig = plt.figure(figsize=(12, 8))
-        for i in range(len(num_substitutes.keys())):
-            sm.graphics.plot_regress_exog(results,
-                                          f"{1} {card2} in pool (log)",
-                                          fig=fig)
-
-
-        # Show the graph
-        plt.show()
 
     print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
@@ -1294,9 +1286,6 @@ GET_DRAFTS_FROM_CACHE = os.path.exists(os.path.join(os.path.dirname(__file__), "
 
 drafts = []
 
-# Take a timestamp
-timestamp = time.time()
-
 if GET_DRAFTS_FROM_CACHE:
     print("Reading drafts from cache")
     drafts = get_drafts_from_cache()
@@ -1357,9 +1346,7 @@ print("=====================================")
 with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
     pickle.dump(drafts, f)
 
-timestamp = time.time()
 parsePoolInfo(cards, drafts)
-print(f"Time to parse pool info: {time.time() - timestamp}")
 
 # For each pair, when each card is on offer, compute the pick rate of each card
 # If there is a local cache, read from that
