@@ -654,44 +654,43 @@ def compareSubstitutes(card1, card2, cardList, card_data):
     print(f"Weighted number of times you see {card2} substitutes: {card2SubsWeighted}")
 
 
-def check_if_substitutes(results, numControls, labels):
+# num_obs is a dictionary where keys i are number of card2 
+def check_if_substitutes(results,
+                         num_controls,
+                         labels,
+                         num_obs={}):
+    debug = True
 
-    indexOfOneSubstitute = numControls
-    indexOfTwoSubstitutes = numControls + 1
-
+    one_sub_idx = num_controls
     elasticity = 0.0
 
     # Total number of observations
-    totalNobs = 0
+    total_obs = 0
 
+    # Get the coefficent of each number of substitutes in the pool
+    # Calculate the difference between having i substitutes and i + 1 substitutes
 
-    # Number of observations for each number of substitutes
-    # This is the number that we want out of nObs
-    j = 0
-    for i in range(indexOfOneSubstitute, len(results.params) - 1):
-        j += 1
-        if debug:
-            print(f"Calculating {labels[indexOfTwoSubstitutes]} - {labels[indexOfTwoSubstitutes]}")
+    num_subs = 1
+    for i in range(one_sub_idx, len(results.params) - 1):
+        print(f"Calculating the difference between {num_subs + 1} and {num_subs} substitutes")
+        coefficient_greater = results.params[i + 1]
+        coefficient_less = results.params[i]
 
-        nextIdx = i + 1
+        num_obs_greater = num_obs[num_subs + 1]
 
-        elasticity = results.params[nextIdx] - results.params[indexOfOneSubstitute]
+        elasticity += (coefficient_greater - coefficient_less) * num_obs_greater
+        total_obs += num_obs_greater
 
-        #multiply by the number of observations at that number
+        num_subs += 1
 
-        elasticity *= results.nobs[j]
-
-        totalNobs += results.nobs[j]
-
-        
-    if totalNobs == 0:
+    if total_obs == 0:
         if debug:
             print('Not enough observations to calculate elasticity of substitution')
         return False, 999
-    
+
     # divide by totalNobs
-    elasticity /= totalNobs
-        
+    elasticity /= total_obs
+
     if debug:
         print(f"Elasticity of substitution: {elasticity}")
 
@@ -738,15 +737,106 @@ def compute_pairwise_pickrates(pairs, drafts):
     return pairs_with_pickrates
 
 
+def check_card_colour(pick, card_colour, card_colour_count):
+    # Check if there's a card of the same colour in the pool
+    # If so, increment the count
+
+    if card_colour in pick.colourInPool:
+        return math.log(pick.colourInPool[card_colour])
+    else:
+        return 0
+
+
+def count_substitutes(pick, subs_list, num_substitutes):
+    substitutes_count = 0
+    # Count total number of substitutes in the pool
+    for card_name in subs_list:
+        card_num = cardNumsHash[card_name]
+        if card_num in pick.numCardInPool:
+            substitutes_count += pick.numCardInPool[card_num]
+            break
+
+    for i in num_substitutes.keys():
+        if substitutes_count == i:
+            num_substitutes[i].append(1)
+        else:
+            num_substitutes[i].append(0)
+
+    return num_substitutes
+
+
+def create_exog(num_subs,
+                check_card1_in_pool,
+                card1_in_pool,
+                check_card1_colour,
+                card1_colour_count,
+                check_card2_colour,
+                card2_colour_count,
+                pick_number,
+                pick_number_list
+                ):
+
+    # Constant term
+    exog = np.ones((len(card1_in_pool), 1))
+    labels = ["Constant"]
+
+    if pick_number:
+        exog = np.column_stack((exog, pick_number_list))
+        labels.append("Pick number")
+
+    if check_card1_colour:
+        exog = np.column_stack((exog, card1_colour_count))
+        labels.append("Card 1 colour in pool (log)")
+
+    if check_card2_colour:
+        exog = np.column_stack((exog, card2_colour_count))
+        labels.append("Card 2 colour in pool(log)")
+
+    if card1_in_pool:
+        exog = np.column_stack((exog, card1_in_pool))
+        labels.append("Card 1 in pool")
+
+    # Theoden in the pool
+    #labels.append("Theoden in pool")
+
+    # Add the number of substitutes in the pool
+    for i in num_subs.keys():
+        exog = np.column_stack((exog, num_subs[i]))
+        labels.append(f"{i} substitutes in pool")
+
+    # At this point, labels and results.params are the same length
+    # If not
+    # Print the labels and the params
+    if len(labels) != len(exog[0]):
+        print("ERROR: Length of labels and params do not match")
+        print(f"Length of labels: {len(labels)}")
+        print(f"Length of exog: {len(exog[0])}")
+        print(labels)
+        print(exog)
+        exit(1)
+
+    return exog, labels
+
+
 # Filter by number of some key card in the pool
 def elasticity_substitution(card1,
                             subs_list,
                             check_card1_colour=True,
                             check_card2_colour=False,
-                            pick_number=True):
+                            pick_number=False,
+                            check_card1_in_pool=False,
+                            ):
+    debug = True
+
     if debug:
         print(f"Checking substitution for {card1}")
         print(f"Checking cards: {subs_list}")
+
+    # If card1 is passed in the list of substitutes, remove it
+    # This is because we *always* use number of card1 already in pool
+    # as a control
+    if card1 in subs_list:
+        subs_list.remove(card1)
 
     # Allow function to take a single substitute
     if type(subs_list) is str:
@@ -754,9 +844,9 @@ def elasticity_substitution(card1,
 
     # Keep a running total for indexes
     num_controls = 0
+
     # Constant term
     num_controls += 1
-
     # Pick number
     if pick_number:
         num_controls += 1
@@ -770,84 +860,60 @@ def elasticity_substitution(card1,
     card1_obj = name_to_card(card1, card_data)
     card1_colour = card1_obj.colour
 
-    card2_obj = None
-    card2_colour = None
+    card2_obj = name_to_card(subs_list[0], card_data)
+    card2_colour = card2_obj.colour
 
     if check_card1_colour:
         num_controls += 1
 
+    if card1_colour == card2_colour:
+        check_card2_colour = False
+
     if check_card2_colour:
-        card2_obj = name_to_card(subs_list[0], card_data)
-        card2_colour = card2_obj.colour
+        num_controls += 1
 
-        if card1_colour == card2_colour:
-            check_card2_colour = False
+    # This is our dependent variable
+    # 1 if card1 was picked, 0 otherwise
+    picked = []
 
-            if debug:
-                print(f"Card 1 and card 2 are the same colour: {card1_colour}")
-                print("Will not check for card 2 colour")
-        else:
-            num_controls += 1
+    # This is our exogenous variable
+    # The number of cards of the same colour as card1 in the pool
+    card1_colour_count, card2_colour_count = [], []
 
-    y = []
-    card1_colour_count = []
+    # Number of card1 in the pool
+    # This is to control for the self-substitution
+    # or self-complementarity
+    # Diminishing or increasing returns to having more of the same card
     card1_in_pool = []
 
-    card2_colour_count = []
+    # Number of substitutes in the pool
+    # Keys are number of substitutes
+    # Values are 1 if there were that many substitutes in the pool 
+    # for this pick
     num_substitutes = {}
 
     for i in range(NUM_MULTIPLES + 1):
         num_substitutes[i] = []
 
-    # If card1 is passed in the list of substitutes, remove it
-    # This is because we *always* use number of card1 already in pool
-    # as a control
-    if card1 in subs_list:
-        subs_list.remove(card1)
-
     for pick in card1_obj.picks:
+        # Translate from number to name
         pick_name = cardNamesHash[pick.pick]
 
         if pick_name == card1:
-            y.append(1)
+            picked.append(1)
         else:
-            y.append(0)
+            picked.append(0)
 
-        # Append number of cards that are the same colour as card1
-        if check_card1_colour:
-            card1_colour_total = 0
-            for colour_of_card in pick.colourInPool.keys():
-                if card1_colour in colour_of_card:
-                    card1_colour_total += pick.colourInPool[colour_of_card]
+        card1_colour_count.append(check_card_colour(pick,
+                                                    card1_colour,
+                                                    card1_colour_count))
 
-            # Take the log of the number of cards
-            # This is to account for diminishing returns
-            card1_colour_total = math.log(card1_colour_total + 1)
-            card1_colour_count.append(card1_colour_total)
-
-        if check_card2_colour:
-            card2_colour_total = 0
-            for colour_of_card in pick.colourInPool.keys():
-                if card2_colour in colour_of_card:
-                    card2_colour_total += pick.colourInPool[colour_of_card]
-            # Take the log of the number of cards
-            # This is to account for diminishing returns
-            card2_colour_total = math.log(card2_colour_total + 1)
-            card2_colour_count.append(card2_colour_total)
-
-        substitutes_count = 0
-        # Count total number of substitutes in the pool
-        for card_name in subs_list:
-            card_num = cardNumsHash[card_name]
-            if card_num in pick.numCardInPool:
-                substitutes_count += pick.numCardInPool[card_num]
-                break
-
-        for i in num_substitutes.keys():
-            if substitutes_count == i:
-                num_substitutes[i].append(1)
-            else:
-                num_substitutes[i].append(0)
+        card2_colour_count.append(check_card_colour(pick,
+                                                    card2_colour,
+                                                    card2_colour_count))
+        num_substitutes = count_substitutes(pick,
+                                            subs_list,
+                                            num_substitutes)
 
         # Control for the number of card1 in the pool
         card1_num = cardNumsHash[card1]
@@ -858,10 +924,12 @@ def elasticity_substitution(card1,
 
     # Eliminate values that didn't have enough observations
     temp = {}
-    num_observations = []
-    for i in range(1, NUM_MULTIPLES + 1):
+    num_observations = {}
+
+    for i in range(0, NUM_MULTIPLES):
         total_observations = sum(num_substitutes[i])
-        num_observations.append(total_observations)
+
+        num_observations[i] = total_observations
 
         if total_observations < OBSERVATIONS_THRESHOLD:
             if debug:
@@ -873,92 +941,57 @@ def elasticity_substitution(card1,
 
     num_substitutes = temp
 
-    endog = np.array(y)
+    # Create the pick_number array
+    pick_number_list = []
+    for pick in card1_obj.picks:
+        pick_number_list.append(pick.pick_number)
 
-    # Assemble exog matrix
-    exog = None
+    # Create the matrices for the regression
+    endog = np.array(picked)
 
-    if pick_number:
-        # Create list of all pick numbers
-        pick_numbers = []
-        for pick in card1_obj.picks:
-            pick_numbers.append(pick.pick_number)
+    exog, labels = create_exog(num_substitutes,
+                               check_card1_in_pool,
+                               card1_in_pool,
+                               check_card1_colour,
+                               card1_colour_count,
+                               check_card2_colour,
+                               card2_colour_count,
+                               pick_number,
+                               pick_number_list)
 
-        # Add the pick number
-        exog = np.array(pick_numbers)
-
-    # Create the array that is 1 if there's a Theoden in pool and 0 otherwise
-    #theoden_in_pool = []
-    #theoden_number = cardNumsHash["Rally at the Hornburg"]
-    #for pick in card1_obj.picks:
-    ##    if pick.numCardInPool[theoden_number] > 0:
-     ##       theoden_in_pool.append(1)
-       #     if debug:
-        #        print(f"Found Theoden in the pool at pick {pick.pick_number}")
-        #else:
-        #    theoden_in_pool.append(0)
-
-    #exog = np.array(theoden_in_pool)
-
-    if check_card1_colour:
-        exog = np.array(card1_colour_count)
-        #exog = np.column_stack((exog, card1_colour_count))
-
-        if check_card2_colour:
-            exog = np.column_stack((exog, card2_colour_count))
-
-        exog = np.column_stack((exog, card1_in_pool))
-    else:
-        exog = np.array(card1_in_pool)
-
-    # Add the number of substitutes in the pool
-    for i in num_substitutes.keys():
-        exog = np.column_stack((exog, num_substitutes[i]))
-
-    # Add a constant term
-    exog = sm.add_constant(exog)
-
+    # Create the model
     model = sm.OLS(endog, exog)
-
-    # Label the variables in the model
-    labels = ["Constant"]
-
-    if pick_number:
-        labels.append("Pick number")
-
-    #labels.append("Theoden in pool")
-
-    if check_card1_colour:
-        labels.append(f"{card1_colour} cards in pool")
-    if check_card2_colour:
-        labels.append(f"{card2_colour} cards in pool")
-
-    labels.append(f"{card1} in pool")
-
-    if len(subs_list) == 1:
-        for i in num_substitutes.keys():
-            labels.append(f"{i} {subs_list[0]} in pool")
-    else:
-        for i in num_substitutes.keys():
-            labels.append(f"{i} substitutes in pool")
 
     model.exog_names[:] = labels
 
     results = model.fit()
 
-    # append total observations at each number to the results
-    # We use this to calculate our elasticity of substitution
-    results.nobs = num_observations
-
     substitutes, elasticity = check_if_substitutes(results,
                                                    num_controls,
-                                                   labels)
+                                                   labels,
+                                                   num_observations)
+
+    debug = True
 
     if debug:
         if substitutes:
             print(f"{card1} and {subs_list} are substitutes")
         else:
             print(f"{card1} and {subs_list} are not substitutes")
+
+        print(results.summary())
+
+        # Graph the results
+        # Plot the residuals
+        fig = plt.figure(figsize=(12, 8))
+        for i in range(len(num_substitutes.keys())):
+            sm.graphics.plot_regress_exog(results,
+                                          f"{1} {card2} in pool (log)",
+                                          fig=fig)
+
+
+        # Show the graph
+        plt.show()
 
     print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
@@ -1066,7 +1099,9 @@ def get_substitutes(cards):
                                                      card2,
                                                      check_card1_colour=True,
                                                      check_card2_colour=False,
-                                                     pick_number=True)
+                                                     pick_number=False,
+                                                     check_card1_in_pool=False,
+                                                     )
                 cards_with_elasticities[card1, card2] = elasticity
 
     # Two cards are substitutes if the elasticiy of substitution card1, card2 < 0 
@@ -1295,19 +1330,23 @@ print(f"Number of pairs: {numPairs}")
 # Eliminate drafs where the drafter didn't end up with at least 6 black cards
 # And at least 6 red cards
 # This is to eliminate drafts where the drafter was not in the right colours
-
+temp = []
 for draft in drafts:
     numRed = 0
     numBlack = 0
     for pick in draft.picks:
-        if pick.pick in cards:
-            if card_data[pick.pick].colour.contains("R"):
+        pickName = cardNamesHash[pick.pick]
+
+        if pickName in cards:
+            if "R" in card_data[pickName].colour:
                 numRed += 1
-            elif card_data[pick.pick].colour.contains("B"):
+            elif "B" in card_data[pickName].colour:
                 numBlack += 1
 
-    if numRed < 7 or numBlack < 7:
-        drafts.remove(draft)
+    if numRed > 5 and numBlack > 5:
+        temp.append(draft)
+
+drafts = temp
 
 # Print the number of remaining drafts
 print(f"Number of drafts after eliminating drafts where drafter did not end up with at least 6 red and 6 black cards: {len(drafts)}")
@@ -1389,6 +1428,9 @@ cards = list(availiabilities.keys())
 card_objs = []
 for card in cards:
     card_objs.append(card_data[card])
+
+# Remove uncommons
+card_objs = [x for x in card_objs if x.rarity != "U"]
 
 regress_alsa(card_objs)
 
