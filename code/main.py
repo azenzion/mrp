@@ -4,7 +4,6 @@ import os
 import csv
 import time
 import pickle
-from statistics import mean
 import numpy as np
 import statsmodels.api as sm
 import math
@@ -23,7 +22,7 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__),
 
 debug = False
 
-num_drafts = 10000
+num_drafts = 100000
 
 # The number of multiples in the pool to consider
 # This just needs to be larger than we're likely to see
@@ -351,7 +350,26 @@ def parse_drafts(csv_file_path, ltr_cards, numDrafts=1000):
 # Keys are pairs
 # More Picked Card, Less Picked Card
 # Values are higher pick rate, lower pick rate, higher winrate, lower winrate, inversion
-def find_inversion_pairs(pairs, card_data, only_return_inverted=True) -> dict:
+def find_inversion_pairs(pairs,
+                         card_data,
+                         only_return_inverted=True,
+                         simple_inversion_score=True,
+                         ) -> dict:
+    print("Finding inversion pairs")
+
+    # If there is a local cache, use it
+    if os.path.exists(os.path.join(os.path.dirname(__file__),
+                                    "..",
+                                    "data",
+                                    "inversion_pairs.pickle")):
+        print("Found local cache of inversion pairs")
+        with open(os.path.join(os.path.dirname(__file__),
+                                 "..",
+                                 "data",
+                                 "inversion_pairs.pickle"),
+                    "rb") as f:
+                return pickle.load(f)
+
     inversion_pairs = {}
 
     card1_pickrate = 0
@@ -406,8 +424,10 @@ def find_inversion_pairs(pairs, card_data, only_return_inverted=True) -> dict:
         winrate_difference = higher_winrate - lower_winrate
         pickrate_difference = higher_pickrate - lower_pickrate
 
-        #inversion = winrate_difference * pickrate_difference
-        inversion = pickrate_difference
+        if simple_inversion_score:
+            inversion = winrate_difference
+        else:
+            inversion = winrate_difference * pickrate_difference
 
         more_picked_card_name = more_picked_card.name
         less_picked_card_name = higher_winrate_card.name
@@ -421,6 +441,14 @@ def find_inversion_pairs(pairs, card_data, only_return_inverted=True) -> dict:
 
     # Print the number of inversion pairs
     print(f"Number of inversion pairs: {len(inversion_pairs.keys())}")
+
+    # Save the results to a local cache
+    with open(os.path.join(os.path.dirname(__file__),
+                           "..",
+                           "data",
+                           "inversion_pairs.pickle"),
+              "wb") as f:
+        pickle.dump(inversion_pairs, f)
 
     return inversion_pairs
 
@@ -529,9 +557,15 @@ def pickRateColour(packCardName, drafts, num_cards=1):
     return timesPickedWithColour / timesSeenWithColour
 
 
-def parsePoolInfo(cardNames, drafts):
+def parsePoolInfo(cardNames, pairs, drafts):
     timestamp = time.time()
     print(f"Computing draft stats for {cardNames}")
+
+    # The drafts, indexed by which pair of cards they contain
+    drats_by_pair = {}
+
+    for pair in pairs:
+        drats_by_pair[pair] = []
 
     for draft in drafts:
 
@@ -659,9 +693,9 @@ def compareSubstitutes(card1, card2, cardList, card_data):
 # num_obs is a dictionary where keys i are number of card2 
 def check_if_substitutes(results,
                          num_controls,
-                         labels,
-                         num_obs={}):
-    debug = True
+                         num_obs={},
+                         weight_by_num_obs=False):
+    debug = False
     one_sub_idx = num_controls
     elasticity = 0.0
 
@@ -670,16 +704,23 @@ def check_if_substitutes(results,
 
     # Get the coefficent of each number of substitutes in the pool
     # Calculate the difference between having i substitutes and i + 1 substitutes
+    STARTING_INDEX = 0
 
-    num_subs = 1
+    num_subs = STARTING_INDEX
     for i in range(one_sub_idx, len(results.params) - 1):
-        print(f"Calculating the difference between {num_subs + 1} and {num_subs} substitutes")
+        #print(f"Calculating the difference between {num_subs + 1} and {num_subs} substitutes")
+
         coefficient_greater = results.params[i + 1]
         coefficient_less = results.params[i]
 
         num_obs_greater = num_obs[num_subs + 1]
+        num_obs_lesser = num_obs[num_subs]
 
-        elasticity += (coefficient_greater - coefficient_less) * num_obs_greater
+        if weight_by_num_obs:
+            elasticity += (coefficient_greater - coefficient_less) * num_obs_greater
+        else:
+            elasticity += (coefficient_greater - coefficient_less)
+
         total_obs += num_obs_greater
 
         num_subs += 1
@@ -690,7 +731,8 @@ def check_if_substitutes(results,
         return False, 999
 
     # divide by totalNobs
-    elasticity /= total_obs
+    if weight_by_num_obs:
+        elasticity /= total_obs
 
     if debug:
         print(f"Elasticity of substitution: {elasticity}")
@@ -828,6 +870,8 @@ def elasticity_substitution(card1,
                             check_card1_in_pool=False,
                             ):
 
+    debug = False
+
     if debug:
         print(f"Checking substitution for {card1}")
         print(f"Checking cards: {subs_list}")
@@ -940,8 +984,8 @@ def elasticity_substitution(card1,
 
         if total_observations < OBSERVATIONS_THRESHOLD:
             if debug:
-                print(f"Not enough observations with {i} cards in the pool.")
-                print("Will eliminate all higher values")
+                print(f"Not enough observations with {i} cards in the pool.\
+                       Will eliminate all higher values")
             break
         else:
             temp[i] = num_substitutes[i]
@@ -975,10 +1019,12 @@ def elasticity_substitution(card1,
 
     substitutes, elasticity = check_if_substitutes(results,
                                                    num_controls,
-                                                   labels,
-                                                   num_observations)
+                                                   num_observations,
+                                                   weight_by_num_obs=True,)
 
+    debug = True
     if debug:
+        print(results.summary())
         if substitutes:
             print(f"{card1} and {subs_list} are substitutes")
         else:
@@ -1009,17 +1055,17 @@ def regress_alsa(cards):
 
     # Populate the data frame
     for card in cards:
-        card_name = card.name
+        card_obj = name_to_card(card, card_data)
         try:
-            number_substitutes = card.numberSubstitutes
+            number_substitutes = card_obj.numberSubstitutes
         except AttributeError as e:
-            print(f"Card {card_name} does not have a number of substitutes")
+            print(f"Card {card} does not have a number of substitutes")
             print(e)
             exit(1)
-        gih_winrate = card.gameInHandWinrate
-        alsa = card.alsa
+        gih_winrate = card_obj.gameInHandWinrate
+        alsa = card_obj.alsa
 
-        regression_data.append([card_name,
+        regression_data.append([card,
                                 number_substitutes,
                                 gih_winrate,
                                 alsa])
@@ -1071,7 +1117,9 @@ def regress_alsa(cards):
 
 
 # pairs: list of tuples (card1 & card2, elasticity)
-def get_substitutes(cards):
+def get_substitutes(cards,
+                    check_2_on_1_elasticity=False,
+                    ):
     print("Getting substitutes for a list of cards")
 
     # Check if there is a local cache
@@ -1096,7 +1144,8 @@ def get_substitutes(cards):
                                                      )
                 cards_with_elasticities[card1, card2] = elasticity
 
-    # Two cards are substitutes if the elasticiy of substitution card1, card2 < 0 
+    # Two cards are substitutes if the elasticiy of substitution card1, card2 < 0
+    # They must also have comparable game in hand winrates
     # Add the substitutes and their elasticities to the dictionary
     for card1 in cards:
         cards_with_subs[card1] = []
@@ -1104,16 +1153,28 @@ def get_substitutes(cards):
             if card1 != card2:
                 elasticity1 = cards_with_elasticities[card1, card2]
                 elasticity2 = cards_with_elasticities[card2, card1]
-                if elasticity1 < 0:
-                    # Using elasticity1 here means that we are weighting
-                    # by the amount that having card2 in the pool
-                    # decreases the pick rate of card1
-                    # This correlates with card quality
-                    cards_with_subs[card1].append((card2, elasticity1))
-                    # Whereas using elasticity2 here means that we are weighting
-                    # by the amount that having card1 in the pool
-                    # decreases the pick rate of card2
-                    #cards_with_subs[card1].append((card2, elasticity2))
+                if elasticity1 >= 0:
+                    continue
+
+                if check_2_on_1_elasticity and elasticity2 >= 0:
+                    continue
+
+                #gih_winrate1 = card_data[card1].gameInHandWinrate
+                #gih_winrate2 = card_data[card2].gameInHandWinrate
+                #winrate_difference = abs(gih_winrate1 - gih_winrate2)
+                #WINTRATE_DIFFERENCE_THRESHOLD = 0.05
+                #if winrate_difference > WINTRATE_DIFFERENCE_THRESHOLD:
+                #    continue
+
+                # Using elasticity1 here means that we are weighting
+                # by the amount that having card2 in the pool
+                # decreases the pick rate of card1
+                # This correlates with card quality
+                cards_with_subs[card1].append((card2, elasticity1))
+                # Whereas using elasticity2 here means that we are weighting
+                # by the amount that having card1 in the pool
+                # decreases the pick rate of card2
+                #cards_with_subs[card1].append((card2, elasticity2))
 
     # Cache the cards with their substitutes
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutes.pickle"), "wb") as f:
@@ -1136,7 +1197,8 @@ def get_substitutes(cards):
 # The second card is the less picked card
 # The third element is the difference in pick rate between the two cards
 # The fourth element is the difference in substitutes seen between the cards
-def regress_inversion_pairs(inversionPairs, card_data):
+def regress_inversion_pairs(inversion_pairs,
+                            card_data):
     print("Regressing pick rate difference on substitutes seen difference")
 
     dependent_var = "Pickrate Difference (Card 1 - Card 2)"
@@ -1144,7 +1206,7 @@ def regress_inversion_pairs(inversionPairs, card_data):
 
     regr_data = []
 
-    for pair in inversionPairs.keys():
+    for pair in inversion_pairs.keys():
         card1, card2 = get_cards_from_pair(pair, card_data)
 
         if type(card1) is Card:
@@ -1153,7 +1215,7 @@ def regress_inversion_pairs(inversionPairs, card_data):
             card2 = card2.name
 
         # Get the coefficient of inversion
-        inversion = inversionPairs[pair]["inversion"]
+        inversion = inversion_pairs[pair]["inversion"]
 
         # Count the total number of observations of the substitutes
         card1_subs_count = card_data[card1].numberSubstitutes
@@ -1162,14 +1224,9 @@ def regress_inversion_pairs(inversionPairs, card_data):
         # At this point, card1 is the more picked card
         # because of how find_inversion_pairs works
 
-        # We want the difference between substitutes seen for the more picked card
-        # and the less picked card
+        # We want the difference between substitutes seen 
+        # for the more picked card and the less picked card
         subs_count_diff = card1_subs_count - card2_subs_count
-
-        # Skip pairs where the coefficient of inversion is 0
-        # These are pairs where players are indifferent between the two cards
-        if inversion == 0:
-            continue
 
         # Append the tuple to the list
         regr_data.append((card1,
@@ -1202,7 +1259,77 @@ def regress_inversion_pairs(inversionPairs, card_data):
     plt.show()
 
 
-def compute_availability(cards_with_subs, card_data):
+def colour_pair_filter(drafts, card_data, colours):
+
+    # Eliminate drafs where the drafter didn't end up with at least 6 black cards
+    # And at least 6 red cards
+    # This is to eliminate drafts where the drafter was not in the right colours
+    temp = []
+
+    num_colour1 = 0
+    num_colour2 = 0
+
+    for draft in drafts:
+        for pick in draft.picks:
+            pick_colour = cardNamesHash[pick.pick]
+
+            if pick_colour in colours[0]:
+                num_colour1 += 1
+            elif pick_colour in colours[1]:
+                num_colour2 += 1
+
+    if num_colour1 > 5 and num_colour2 > 5:
+        temp.append(draft)
+
+    drafts = temp
+
+    # Print the number of remaining drafts
+    print(f"Number of drafts after eliminating drafts where drafter did not end up with at least 6 red and 6 black cards: {len(drafts)}")
+
+    print("=====================================")
+
+    # Overwrite the cache to eliminate drafts where the drafter did not end up with at least 6 red and 6 black cards
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
+        pickle.dump(drafts, f)
+
+    return drafts
+
+
+def store_availability(card_data,
+                       availabilities):
+
+    for availability in availabilities.keys():
+        card_name = availability
+        card_data[card_name].numberSubstitutes = availabilities[availability]
+
+    debug = True
+    if debug:
+
+        # Print the cards sorted by their availability
+        availabilities = {k: v for k, v in sorted(availabilities.items(),
+                          key=lambda item: item[1],
+                          reverse=True)}
+
+        print("All cards along with their substitutes")
+        print("=====================================")
+        for card in availabilities.keys():
+            print(f"{card}: {availabilities[card]}")
+
+            # Print the top 3 substitutes
+            substitutes = cards_with_subs[card]
+            substitutes.sort(key=lambda x: x[1])
+            substitutes = substitutes[:3]
+            for substitute in substitutes:
+                print(f"{substitute[0]}: {substitute[1]}")
+
+            print("=====================================")
+
+    return card_data
+
+
+def compute_availability(cards_with_subs,
+                         card_data,
+                         ):
     print("Computing availability of substitutes")
 
     # Check if there is a local cache
@@ -1210,7 +1337,9 @@ def compute_availability(cards_with_subs, card_data):
     # if so return it
     if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle")):
         with open(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle"), "rb") as f:
-            return pickle.load(f)
+            availabilities = pickle.load(f)
+            card_data = store_availability(card_data, availabilities)
+            return availabilities, card_data
 
     availabilities = {}
 
@@ -1235,7 +1364,27 @@ def compute_availability(cards_with_subs, card_data):
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle"), "wb") as f:
         pickle.dump(availabilities, f)
 
-    return availabilities
+    card_data = store_availability(card_data, availabilities)
+
+    return availabilities, card_data
+
+
+def get_pairs(colours, card_data):
+    cards = []
+
+    cards = get_cards_in_colours(card_data, colours)
+
+    pairs = []
+    for card1 in cards:
+        for card2 in cards:
+            if card1 != card2:
+                pairs.append((card1, card2))
+
+    # Compute the number of pairs
+    num_pairs = len(pairs)
+    print(f"Number of pairs: {num_pairs}")
+
+    return cards, pairs
 
 
 def get_cards_in_colours(card_data, colours):
@@ -1266,8 +1415,8 @@ def get_cards_in_colours(card_data, colours):
 
     return cards
 
-# Create initial timestamp
-timestamp = time.time()
+
+# Main script
 
 ltr_cards = []
 with open(cardlist_file_path, "r") as f:
@@ -1282,7 +1431,12 @@ for i in range(NUM_CARDS_IN_SET):
     cardNamesHash[i] = ltr_cards[i]
     cardNumsHash[ltr_cards[i]] = i
 
-GET_DRAFTS_FROM_CACHE = os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"))
+GET_DRAFTS_FROM_CACHE = os.path.exists(os.path.join(os.path.dirname(__file__),
+                                                    "..", 
+                                                    "data", 
+                                                    "drafts.pickle"
+                                                    )
+                                       )
 
 drafts = []
 
@@ -1290,63 +1444,30 @@ if GET_DRAFTS_FROM_CACHE:
     print("Reading drafts from cache")
     drafts = get_drafts_from_cache()
 else:
+    print("Parsing drafts from CSV")
     drafts = parse_drafts(csv_file_path, ltr_cards, num_drafts)
 
     # Use pickle to cache
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
         pickle.dump(drafts, f)
 
-# Print time to parse drafts
-print(f"Time to parse drafts: {time.time() - timestamp}")
-
-card_data = {}
 card_data = getCardData()
 
-cards = []
+colours = ["R", "B"]
 
-cards = get_cards_in_colours(card_data, ["R", "B"])
+drafts = colour_pair_filter(drafts, card_data, colours)
 
-pairs = []
-for card1 in cards:
-    for card2 in cards:
-        if card1 != card2:
-            pairs.append((card1, card2))
+cards, pairs = get_pairs(colours, card_data)
 
-# Compute the number of pairs
-numPairs = len(pairs)
-print(f"Number of pairs: {numPairs}")
+parsePoolInfo(cards, pairs, drafts)
 
-# Eliminate drafs where the drafter didn't end up with at least 6 black cards
-# And at least 6 red cards
-# This is to eliminate drafts where the drafter was not in the right colours
-temp = []
-for draft in drafts:
-    numRed = 0
-    numBlack = 0
-    for pick in draft.picks:
-        pickName = cardNamesHash[pick.pick]
+cards_with_subs = get_substitutes(cards)
 
-        if pickName in cards:
-            if "R" in card_data[pickName].colour:
-                numRed += 1
-            elif "B" in card_data[pickName].colour:
-                numBlack += 1
+# Compute the number of substitutes seen for each card
+# Append to the card object
+availiabilities, card_data = compute_availability(cards_with_subs, card_data)
 
-    if numRed > 5 and numBlack > 5:
-        temp.append(draft)
-
-drafts = temp
-
-# Print the number of remaining drafts
-print(f"Number of drafts after eliminating drafts where drafter did not end up with at least 6 red and 6 black cards: {len(drafts)}")
-
-print("=====================================")
-
-# Overwrite the cache to eliminate drafts where the drafter did not end up with at least 6 red and 6 black cards
-with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
-    pickle.dump(drafts, f)
-
-parsePoolInfo(cards, drafts)
+regress_alsa(cards)
 
 # For each pair, when each card is on offer, compute the pick rate of each card
 # If there is a local cache, read from that
@@ -1354,74 +1475,9 @@ parsePoolInfo(cards, drafts)
 
 pairs = compute_pairwise_pickrates(pairs, drafts)
 
-# For each red card, compute its substitutes
-# This is all the cards with elasticity of substitution < -0.005
-# This is a list of tuples
-# The first element is the card name
-# The second element is the elasticity of substitution
-# The third element is the number of observations of substitutes
+inversion_pairs = find_inversion_pairs(pairs, card_data)
 
-cards_with_subs = get_substitutes(cards)
-
-# Compute the number of substitutes seen for each card
-availiabilities = compute_availability(cards_with_subs, card_data)
-
-# Print the cards sorted by their availability
-availiabilities = {k: v for k, v in sorted(availiabilities.items(),
-                                           key=lambda item: item[1],
-                                           reverse=True)}
-
-print("All cards along with their substitutes")
-print("=====================================")
-for card in availiabilities.keys():
-    print(f"{card}: {availiabilities[card]}")
-    # Print its substitutes
-    substitutes = cards_with_subs[card]
-    for substitute in substitutes:
-        print(f"{substitute[0]}: {substitute[1]}")
-
-    print("=====================================")
-
-
-# Add to card_data as a field of the card object
-for card in card_data.values():
-    if card.name in availiabilities.keys():
-        card.numberSubstitutes = availiabilities[card.name]
-    else:
-        card.numberSubstitutes = 0
-
-# Find pairs where the card with the lower GIH winrate is picked more often
-# If there is a local cache, read from that
-# Otherwise, compute the inversion pairs
-inversionPairs = {}
-if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "inversionPairs.pickle")):
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "inversionPairs.pickle"), "rb") as f:
-        inversionPairs = pickle.load(f)
-else:
-    inversionPairs = find_inversion_pairs(pairs, card_data, only_return_inverted=True)
-
-    # Cache the inversion pairs
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "inversionPairs.pickle"), "wb") as f:
-        pickle.dump(inversionPairs, f)
-
-# Sort availabilities by value
-# Ascending
-availiabilities = {k: v for k, v in sorted(availiabilities.items(),
-                                             key=lambda item: item[1],
-                                             reverse=False)}
-
-cards = list(availiabilities.keys())
-
-card_objs = []
-for card in cards:
-    card_objs.append(card_data[card])
-
-# Remove uncommons
-card_objs = [x for x in card_objs if x.rarity != "U"]
-
-regress_alsa(card_objs)
-
-regress_inversion_pairs(inversionPairs, card_data)
+regress_inversion_pairs(inversion_pairs, card_data)
 
 # Print the time that script took to run
 print("Time to run: " + str(time.time() - timestamp))
