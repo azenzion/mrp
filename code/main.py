@@ -22,17 +22,20 @@ cardlist_file_path = os.path.join(os.path.dirname(__file__),
 
 debug = False
 
-num_drafts = 100000
+NUM_DRAFTS = 1000000
 
 # The number of multiples in the pool to consider
 # This just needs to be larger than we're likely to see
-# in the datav
+# in the data
+# In practice this is like, 4 or 5 at most
 NUM_MULTIPLES = 10
 
 # For a number x
 # If there are less drafts than this with x of card2 in pool
 # we will not consider it
 OBSERVATIONS_THRESHOLD = 40
+
+ELASTICITY_THRESHOLD = -0.01
 
 OPTIMIZE_STORAGE = True
 
@@ -52,12 +55,19 @@ redRemoval = ["Fear, Fire, Foes!",
 def get_colours():
     COLOURS = ['W', 'U', 'B', 'R', 'G', '']
 
-    # Generate a list of all possible colour combinations
-    temp_colours = []
+    # We want all the colour combinations
+    # This is a list of all the possible combinations
+    # of the colours
+    # We use this to get the colour pairs
+    # and the colour triples
+    colour_combinations = []
     for i in range(1, len(COLOURS) + 1):
-        temp_colours.extend(list(itertools.permutations(COLOURS, i)))
+        colour_combinations.extend(itertools.combinations(COLOURS, i))
 
-    return COLOURS
+    # Convert each tuple to a string
+    colour_combinations = ["".join(colour) for colour in colour_combinations]
+
+    return colour_combinations
 
 
 COLOURS = get_colours()
@@ -164,6 +174,20 @@ def name_to_card(card_name, card_data):
     exit(1)
 
 
+def name_to_colour(card_name, card_data):
+
+    # If given a number, convert to a string
+    if type(card_name) is int:
+        card_name = cardNamesHash[card_name]
+
+    if card_name in card_data:
+        return card_data[card_name].colour
+
+    print("ERROR: Card not found in card_data")
+    print(f"Card: {card_name}")
+    exit(1)
+
+
 # Return card data for two cards
 # If the input is a tuple, it is assumed to be a pair
 # If the input is a string, it is assumed to be a pair of the form "card1 & card2"
@@ -249,22 +273,48 @@ def compute_pairwise_pickrate(drafts, card1, card2):
     return card1_count / choice_count, card2_count / choice_count
 
 
-def parse_drafts(csv_file_path, ltr_cards, numDrafts=1000):
+def parse_drafts(csv_file_path, ltr_cards, numDrafts):
+    drafts = []
+
+    DRAFTS_CACHE = os.path.join(os.path.dirname(__file__),
+                                '..',
+                                'data',
+                                'drafts.pickle')
+
+    # If there is a local cache, use it
+    if os.path.exists(DRAFTS_CACHE):
+        print("Found local cache of drafts")
+        with open(DRAFTS_CACHE, "rb") as f:
+            drafts = pickle.load(f)
+        # If the length of drafts is not within
+        # one order of magnitude of numDrafts
+        # delete the local cache and proceed with reading csv
+        if len(drafts) < numDrafts / 10 or len(drafts) > 10 * numDrafts:
+            print("Length of drafts does not match numDrafts")
+            print(f"Length of drafts: {len(drafts)}")
+            print(f"numDrafts: {numDrafts}")
+            print("Deleting all local chaches and proceeding with reading csv")
+
+            # delete all ".pickle" files in the data directory
+            for filename in os.listdir(os.path.join(os.path.dirname(__file__), "..", "data")):
+                if filename.endswith(".pickle"):
+                    os.remove(os.path.join(os.path.dirname(__file__), "..", "data", filename))
+
+            # Proceed with reading csv
+            drafts = []
+        else:
+            return drafts
+
     csv_reader = None
     print('begin parsing draft data')
     with open(csv_file_path, "r") as f:
         # Create a CSV reader
-        csv_reader = csv.reader(f,
-                                 delimiter=",")
-
+        csv_reader = csv.reader(f, delimiter=",")
 
         # Read the header row
         header_row = next(csv_reader)
         if debug:
             print(header_row)
-
-        # Parse into draft objects
-        drafts = []
 
         # Create fist empty draft
         draft = Draft()
@@ -291,7 +341,7 @@ def parse_drafts(csv_file_path, ltr_cards, numDrafts=1000):
             # Make into a pick object
             pick = Pick()
             pick.draft_id = row[2]
-            pick.pack_number = row[7]
+            pick.pack_number = int(row[7])
             pick.pick_number = row[8]
             pick.pick = cardNumsHash[row[9]]
 
@@ -342,6 +392,16 @@ def parse_drafts(csv_file_path, ltr_cards, numDrafts=1000):
             if len(drafts) > numDrafts:
                 break
 
+    # Save the results to a local cache
+    with open(os.path.join(os.path.dirname(__file__),
+                           "..",
+                           "data",
+                           "drafts.pickle"),
+              "wb") as f:
+        pickle.dump(drafts, f)
+
+    print('Found ' + str(len(drafts)) + ' drafts')
+
     return drafts
 
 
@@ -353,7 +413,7 @@ def parse_drafts(csv_file_path, ltr_cards, numDrafts=1000):
 def find_inversion_pairs(pairs,
                          card_data,
                          only_return_inverted=True,
-                         simple_inversion_score=True,
+                         simple_inversion_score=False,
                          ) -> dict:
     print("Finding inversion pairs")
 
@@ -557,62 +617,98 @@ def pickRateColour(packCardName, drafts, num_cards=1):
     return timesPickedWithColour / timesSeenWithColour
 
 
-def parsePoolInfo(cardNames, pairs, drafts):
+def append_regr_info_to_card(card, pick):
+    # The information we need to append to the card is
+    # 1 was the card picked
+    # 2 how many copies of the card were in the pool
+    # 3 how many copies of the card were in the pool of the same colour
+    # num_cards in pool to calculate subsitutes later
+
+    pick_for_regr = {}
+    pick_for_regr["wasPicked"] = 0
+    pick_for_regr["sameCardInPool"] = 0
+    pick_for_regr["sameColourInPool"] = 0
+    pick_for_regr["numCardInPool"] = {}
+
+    # Check if the card was picked
+    if pick.pick == cardNumsHash[card.name]:
+        pick_for_regr["wasPicked"] = 1
+
+    # Check if the card was in the pool
+    if card.name in pick.numCardInPool:
+        pick_for_regr["sameCardInPool"] = pick.numCardInPool[card.name]
+
+    # Check if the card was in the pool of the same colour
+    if card.colour in pick.colourInPool:
+        pick_for_regr["sameColourInPool"] = pick.colourInPool[card.colour]
+
+    pick_for_regr["numCardInPool"] = pick.numCardInPool
+
+    pick_for_regr["pick_number"] = pick.pick_number
+
+    card.picks.append(pick_for_regr)
+
+
+
+def dict_increment(dictionary, key):
+    if key in dictionary:
+        dictionary[key] += 1
+    else:
+        dictionary[key] = 1
+
+
+def process_draft_pool(draft):
+
+    # initialize values
+    num_card_in_draft_pool = {}
+    colour_in_draft_pool = {}
+
+    for pick in draft.picks:
+
+        # Convert from number to name
+        pick_name = cardNamesHash[pick.pick]
+
+        # Log card
+        dict_increment(num_card_in_draft_pool, pick_name)
+
+        pool_card_colour = name_to_colour(pick_name, card_data)
+        # Log colour of card
+        dict_increment(colour_in_draft_pool, pool_card_colour)
+
+        # Add the pool cards to pick.numCardInPool
+        pick.numCardInPool = num_card_in_draft_pool
+        pick.colourInPool = colour_in_draft_pool
+
+        # Pool analysis
+        # Count number of coloured cards in the pool
+        for pool_card in num_card_in_draft_pool.keys():
+            card = card_data[pool_card]
+
+        append_regr_info_to_card(card, pick)
+
+
+
+
+# This sets us up for the regression
+# And lets us only store information about those cards
+# in the pool which we care about
+# This is a memory optimization
+# We go trough each draft
+# For each pick, we go through the pool
+# If the card is in the pool, we count it
+def parse_pool_info(card_names, pairs, drafts):
     timestamp = time.time()
-    print(f"Computing draft stats for {cardNames}")
+    print(f"Computing draft stats for {card_names}")
 
-    # The drafts, indexed by which pair of cards they contain
-    drats_by_pair = {}
-
-    for pair in pairs:
-        drats_by_pair[pair] = []
+    # Make a dictionary
+    # Keys are pairs of cards
+    # Values is a list of ints
+    # where a 0 indicates that card1 was chosen
+    # and a 1 indicates that card2 was chosen
+    # We use this for pairwise pick rates
 
     for draft in drafts:
-
-        # Track the pool as we go
-        draftPool = []
-
-        for pick in draft.picks:
-            pickName = cardNamesHash[pick.pick]
-
-            # initialize values
-            for cardName in cardNames:
-                # Find the key which has value cardName
-                # in cardNamesHash
-                cardNum = cardNumsHash[cardName]
-                if cardNum not in pick.numCardInPool:
-                    pick.numCardInPool[cardNum] = 0
-
-            # Pool analysis
-            # Count number of coloured cards in the pool
-            for poolCardName in draftPool:
-                for cardName in cardNames:
-                    if cardName == poolCardName:
-                        cardNum = cardNumsHash[cardName]
-                        pick.numCardInPool[cardNum] += 1
-
-                poolCard = name_to_card(poolCardName, card_data)
-                poolCardColour = poolCard.colour
-
-                if poolCardColour not in pick.colourInPool:
-                    pick.colourInPool[poolCardColour] = 0
-                pick.colourInPool[poolCardColour] += 1
-
-            for cardName in cardNames:
-                card = name_to_card(cardName, card_data)
-                cardNum = cardNumsHash[cardName]
-
-                if cardNum in pick.pack_cards:
-
-                    # Store with each card a list of picks where the card was seen
-                    card.picks.append(pick)
-
-                    card.timesSeen += 1
-                    if cardName == pick.pick:
-                        card.timesPicked += 1
-
-            # Add the pick to the pool
-            draftPool.append(pickName)
+        process_draft_pool(draft)
 
     print(f"Time to parse pool info: {time.time() - timestamp}")
 
@@ -693,9 +789,8 @@ def compareSubstitutes(card1, card2, cardList, card_data):
 # num_obs is a dictionary where keys i are number of card2 
 def check_if_substitutes(results,
                          num_controls,
-                         num_obs={},
-                         weight_by_num_obs=False):
-    debug = False
+                         num_obs,
+                         weight_by_num_obs):
     one_sub_idx = num_controls
     elasticity = 0.0
 
@@ -708,16 +803,18 @@ def check_if_substitutes(results,
 
     num_subs = STARTING_INDEX
     for i in range(one_sub_idx, len(results.params) - 1):
-        #print(f"Calculating the difference between {num_subs + 1} and {num_subs} substitutes")
 
+        # Get the coefficient for having i + 1 substitutes
         coefficient_greater = results.params[i + 1]
+        # Get the coefficient for having i substitutes
         coefficient_less = results.params[i]
 
+        # If we're weighting by number of observations
+        # Get the number of observations for each number of substitutes
         num_obs_greater = num_obs[num_subs + 1]
-        num_obs_lesser = num_obs[num_subs]
 
         if weight_by_num_obs:
-            elasticity += (coefficient_greater - coefficient_less) * num_obs_greater
+            elasticity += (coefficient_greater - coefficient_less) * num_obs_greater * (i+1)
         else:
             elasticity += (coefficient_greater - coefficient_less)
 
@@ -790,14 +887,27 @@ def check_card_colour(pick, card_colour, card_colour_count):
         return 0
 
 
-def count_substitutes(pick, subs_list, num_substitutes):
+def after_pack_1(drafts):
+    temp = []
+    for draft in drafts:
+        draft_temp = Draft()
+        for pick in draft.picks:
+            if pick.pack_number > 1:
+                draft_temp.picks.append(pick)
+        temp.append(draft_temp)
+    return temp
+
+
+def count_substitutes(pick,
+                      subs_list,
+                      num_substitutes,
+                      card1):
     substitutes_count = 0
+
     # Count total number of substitutes in the pool
     for card_name in subs_list:
-        card_num = cardNumsHash[card_name]
-        if card_num in pick.numCardInPool:
-            substitutes_count += pick.numCardInPool[card_num]
-            break
+        if card_name in pick['numCardInPool']:
+            substitutes_count += pick['numCardInPool'][card_name]
 
     for i in num_substitutes.keys():
         if substitutes_count == i:
@@ -861,13 +971,35 @@ def create_exog(num_subs,
     return exog, labels
 
 
+def eliminate_low_observations(num_substitutes):
+    temp = {}
+    num_observations = {}
+
+    for i in range(0, NUM_MULTIPLES):
+        total_observations = sum(num_substitutes[i])
+
+        num_observations[i] = total_observations
+
+        if total_observations < OBSERVATIONS_THRESHOLD:
+            if debug:
+                print(f"Not enough observations with {i} cards in the pool.\
+                       Will eliminate all higher values")
+            break
+        else:
+            temp[i] = num_substitutes[i]
+
+    num_substitutes = temp
+
+    return num_substitutes, num_observations
+
+
 # Filter by number of some key card in the pool
 def elasticity_substitution(card1,
                             subs_list,
-                            check_card1_colour=True,
-                            check_card2_colour=False,
-                            pick_number=False,
-                            check_card1_in_pool=False,
+                            check_card1_colour,
+                            check_card2_colour,
+                            pick_number,
+                            check_card1_in_pool,
                             ):
 
     debug = False
@@ -879,7 +1011,7 @@ def elasticity_substitution(card1,
     # If card1 is passed in the list of substitutes, remove it
     # This is because we *always* use number of card1 already in pool
     # as a control
-    if card1 in subs_list:
+    if check_card1_in_pool and card1 in subs_list:
         subs_list.remove(card1)
 
     # Allow function to take a single substitute
@@ -918,10 +1050,6 @@ def elasticity_substitution(card1,
 
     if check_card1_in_pool:
         num_controls += 1
-    else:
-        # If we're not checking whether card1 is in the pool
-        # Add card1 to the list of substitutes
-        subs_list.append(card1)
 
     # This is our dependent variable
     # 1 if card1 was picked, 0 otherwise
@@ -946,56 +1074,24 @@ def elasticity_substitution(card1,
     for i in range(NUM_MULTIPLES + 1):
         num_substitutes[i] = []
 
+    # picked is just concatentating pick.wasPicked for each pick
     for pick in card1_obj.picks:
-        # Translate from number to name
-        pick_name = cardNamesHash[pick.pick]
+        picked.append(pick['wasPicked'])
+        card1_colour_count.append(pick['sameColourInPool'])
+        card1_in_pool.append(pick['sameCardInPool'])
 
-        if pick_name == card1:
-            picked.append(1)
-        else:
-            picked.append(0)
-
-        card1_colour_count.append(check_card_colour(pick,
-                                                    card1_colour,
-                                                    card1_colour_count))
-
-        card2_colour_count.append(check_card_colour(pick,
-                                                    card2_colour,
-                                                    card2_colour_count))
         num_substitutes = count_substitutes(pick,
                                             subs_list,
-                                            num_substitutes)
-
-        # Control for the number of card1 in the pool
-        card1_num = cardNumsHash[card1]
-        if card1_num in pick.numCardInPool:
-            card1_in_pool.append(pick.numCardInPool[card1_num])
-        else:
-            card1_in_pool.append(0)
+                                            num_substitutes,
+                                            card1)
 
     # Eliminate values that didn't have enough observations
-    temp = {}
-    num_observations = {}
-
-    for i in range(0, NUM_MULTIPLES):
-        total_observations = sum(num_substitutes[i])
-
-        num_observations[i] = total_observations
-
-        if total_observations < OBSERVATIONS_THRESHOLD:
-            if debug:
-                print(f"Not enough observations with {i} cards in the pool.\
-                       Will eliminate all higher values")
-            break
-        else:
-            temp[i] = num_substitutes[i]
-
-    num_substitutes = temp
+    num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
 
     # Create the pick_number array
     pick_number_list = []
     for pick in card1_obj.picks:
-        pick_number_list.append(pick.pick_number)
+        pick_number_list.append(pick['pick_number'])
 
     # Create the matrices for the regression
     endog = np.array(picked)
@@ -1022,14 +1118,12 @@ def elasticity_substitution(card1,
                                                    num_observations,
                                                    weight_by_num_obs=True,)
 
-    debug = True
     if debug:
         print(results.summary())
         if substitutes:
             print(f"{card1} and {subs_list} are substitutes")
         else:
             print(f"{card1} and {subs_list} are not substitutes")
-
 
     print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
@@ -1116,10 +1210,14 @@ def regress_alsa(cards):
     plt.show()
 
 
-# pairs: list of tuples (card1 & card2, elasticity)
+# Get all the substitutes for a list of cards
+# Takes a list of cards
+# Returns {
+#  card1: [(sub1, elasticity1), (sub2, elasticity2), ...],
+#  card2: ...
+# }
 def get_substitutes(cards,
-                    check_2_on_1_elasticity=False,
-                    ):
+                    symmetrical_subs) -> dict:
     print("Getting substitutes for a list of cards")
 
     # Check if there is a local cache
@@ -1140,7 +1238,7 @@ def get_substitutes(cards,
                                                      check_card1_colour=True,
                                                      check_card2_colour=False,
                                                      pick_number=False,
-                                                     check_card1_in_pool=False,
+                                                     check_card1_in_pool=True,
                                                      )
                 cards_with_elasticities[card1, card2] = elasticity
 
@@ -1156,25 +1254,18 @@ def get_substitutes(cards,
                 if elasticity1 >= 0:
                     continue
 
-                if check_2_on_1_elasticity and elasticity2 >= 0:
+                if symmetrical_subs and elasticity2 >= 0:
                     continue
 
-                #gih_winrate1 = card_data[card1].gameInHandWinrate
-                #gih_winrate2 = card_data[card2].gameInHandWinrate
-                #winrate_difference = abs(gih_winrate1 - gih_winrate2)
-                #WINTRATE_DIFFERENCE_THRESHOLD = 0.05
-                #if winrate_difference > WINTRATE_DIFFERENCE_THRESHOLD:
-                #    continue
+                # WINTRATE_DIFFERENCE_THRESHOLD = 0.05
 
-                # Using elasticity1 here means that we are weighting
-                # by the amount that having card2 in the pool
-                # decreases the pick rate of card1
-                # This correlates with card quality
-                cards_with_subs[card1].append((card2, elasticity1))
-                # Whereas using elasticity2 here means that we are weighting
-                # by the amount that having card1 in the pool
-                # decreases the pick rate of card2
-                #cards_with_subs[card1].append((card2, elasticity2))
+                chosen_elasticity = elasticity1
+
+                # Ignore the substitutes if the elasticity is too high
+                if chosen_elasticity > ELASTICITY_THRESHOLD:
+                    continue
+
+                cards_with_subs[card1].append((card2, chosen_elasticity))
 
     # Cache the cards with their substitutes
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutes.pickle"), "wb") as f:
@@ -1259,34 +1350,52 @@ def regress_inversion_pairs(inversion_pairs,
     plt.show()
 
 
-def colour_pair_filter(drafts, card_data, colours):
+def colour_pair_filter(drafts, colours):
+    print(f"Filtering drafts by colour pair {colours}")
+    print(f"Will parse {len(drafts)} drafts")
 
     # Eliminate drafs where the drafter didn't end up with at least 6 black cards
     # And at least 6 red cards
     # This is to eliminate drafts where the drafter was not in the right colours
     temp = []
 
-    num_colour1 = 0
-    num_colour2 = 0
-
     for draft in drafts:
+
+        num_colour1 = 0
+        num_colour2 = 0
+
         for pick in draft.picks:
-            pick_colour = cardNamesHash[pick.pick]
+            pick_name = cardNamesHash[pick.pick]
+            card_obj = name_to_card(pick_name, card_data)
+            pick_colour = card_obj.colour
 
             if pick_colour in colours[0]:
                 num_colour1 += 1
             elif pick_colour in colours[1]:
                 num_colour2 += 1
 
-    if num_colour1 > 5 and num_colour2 > 5:
-        temp.append(draft)
+        if num_colour1 > 5 and num_colour2 > 5:
+            temp.append(draft)
+
+            if debug:
+                print(f"Found draft where drafter ended up with \
+                    at least 6 {colours[0]} cards and 6 {colours[1]} cards")
+
+        elif debug:
+            print(f"Drater ended up with {num_colour1} {colours[0]} cards \
+                    and {num_colour2} {colours[1]} cards, skipping") 
+
+    print(f"Number of drafts after eliminating drafts where drafter \
+            did not end up with at least 6 {colours[0]} cards \
+            and 6 {colours[1]} cards: {len(temp)}")
 
     drafts = temp
 
-    # Print the number of remaining drafts
-    print(f"Number of drafts after eliminating drafts where drafter did not end up with at least 6 red and 6 black cards: {len(drafts)}")
-
     print("=====================================")
+
+    if len(drafts) == 0:
+        print("No drafts left after filtering by colour pair")
+        exit(1)
 
     # Overwrite the cache to eliminate drafts where the drafter did not end up with at least 6 red and 6 black cards
     with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
@@ -1302,29 +1411,38 @@ def store_availability(card_data,
         card_name = availability
         card_data[card_name].numberSubstitutes = availabilities[availability]
 
-    debug = True
-    if debug:
-
-        # Print the cards sorted by their availability
-        availabilities = {k: v for k, v in sorted(availabilities.items(),
-                          key=lambda item: item[1],
-                          reverse=True)}
-
-        print("All cards along with their substitutes")
-        print("=====================================")
-        for card in availabilities.keys():
-            print(f"{card}: {availabilities[card]}")
-
-            # Print the top 3 substitutes
-            substitutes = cards_with_subs[card]
-            substitutes.sort(key=lambda x: x[1])
-            substitutes = substitutes[:3]
-            for substitute in substitutes:
-                print(f"{substitute[0]}: {substitute[1]}")
-
-            print("=====================================")
-
     return card_data
+
+
+def log_availabilities(availabilities):
+    print("Logging availability of substitutes")
+
+    # Write to a log file
+    # Sort all cards by availability score
+    # Print card: availability
+    # substitute1: elasticity
+    # substitute2: elasticity
+    # ...
+    # ========
+
+    # Sort the cards by availability
+    sorted_availabilities = sorted(availabilities.items(), key=lambda x: x[1], reverse=True)
+
+    # Open the log file
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.log"), "w") as f:
+        # Print each card and its availability
+        for card, availability in sorted_availabilities:
+            f.write(f"{card}: {sorted_availabilities.index((card, availability))} / {len(sorted_availabilities)} {availability}\n")
+            f.write("-----------------------------\n")
+
+            # Sort the substitutes by elasticity ascending
+            cards_with_subs[card].sort(key=lambda x: x[1])
+
+            # Print each substitute and its elasticity
+            for substitute in cards_with_subs[card]:
+                f.write(f"{substitute[0]}: {substitute[1]}\n")
+
+            f.write("=============================\n")
 
 
 def compute_availability(cards_with_subs,
@@ -1353,7 +1471,7 @@ def compute_availability(cards_with_subs,
             # Weight the number of observations by the elasticity
             # This is to account for the fact that some substitutes
             # are closer than others
-            sub_availability = abs(card_data[card2].numberSeen * card2_elas / num_drafts)
+            sub_availability = abs(card_data[card2].numberSeen * card2_elas / NUM_DRAFTS)
             cardSubstitutesCount += sub_availability
 
             #cardSubstitutesCount += 1
@@ -1431,53 +1549,38 @@ for i in range(NUM_CARDS_IN_SET):
     cardNamesHash[i] = ltr_cards[i]
     cardNumsHash[ltr_cards[i]] = i
 
-GET_DRAFTS_FROM_CACHE = os.path.exists(os.path.join(os.path.dirname(__file__),
-                                                    "..", 
-                                                    "data", 
-                                                    "drafts.pickle"
-                                                    )
-                                       )
-
-drafts = []
-
-if GET_DRAFTS_FROM_CACHE:
-    print("Reading drafts from cache")
-    drafts = get_drafts_from_cache()
-else:
-    print("Parsing drafts from CSV")
-    drafts = parse_drafts(csv_file_path, ltr_cards, num_drafts)
-
-    # Use pickle to cache
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
-        pickle.dump(drafts, f)
+drafts = parse_drafts(csv_file_path, ltr_cards, NUM_DRAFTS)
 
 card_data = getCardData()
 
 colours = ["R", "B"]
 
-drafts = colour_pair_filter(drafts, card_data, colours)
-
 cards, pairs = get_pairs(colours, card_data)
 
-parsePoolInfo(cards, pairs, drafts)
+drafts = colour_pair_filter(drafts, colours)
 
-cards_with_subs = get_substitutes(cards)
+drafts = after_pack_1(drafts)
 
-# Compute the number of substitutes seen for each card
-# Append to the card object
+pairs_dict = parse_pool_info(cards, pairs, drafts)
+
+# Parameters I've been messing around with:
+# 1. check_card1_colour
+# 2. weight elasticity by number of observations
+# 3. symmetrical_subs
+# 4. pick_number
+# 5. check_card1_in_pool
+
+cards_with_subs = get_substitutes(cards,
+                                  symmetrical_subs=True)
+
 availiabilities, card_data = compute_availability(cards_with_subs, card_data)
 
-regress_alsa(cards)
+log_availabilities(availiabilities)
 
-# For each pair, when each card is on offer, compute the pick rate of each card
-# If there is a local cache, read from that
-# Otherwise, compute the pairwise pick rates
+regress_alsa(cards)
 
 pairs = compute_pairwise_pickrates(pairs, drafts)
 
 inversion_pairs = find_inversion_pairs(pairs, card_data)
 
 regress_inversion_pairs(inversion_pairs, card_data)
-
-# Print the time that script took to run
-print("Time to run: " + str(time.time() - timestamp))
