@@ -2,863 +2,674 @@ Regression parameters
 ======================
 check_card1_colour: False
 check_card2_colour: True
-pick_number: True
 check_card1_in_pool: False
-symmetrical_subs: True
-logify: True
-debug: False
+pick_number: True
 ======================
 Card Rush the Room
 Rank 0 out of 62
-availability score: 2511.5971617805344
+availability score: 1525.4981037329303
 -----------------------------
-Rally at the Hornburg: -180.34338408036672
-Improvised Club: -142.56806316663923
-Gimli's Fury: -135.14877741388747
-Mordor Trebuchet: -132.4945844313874
-Relentless Rohirrim: -117.00740703973752
-Swarming of Moria: -87.1424043766014
-Quarrel's End: -86.63239693066421
-Olog-hai Crusher: -84.67001522267365
-Snarling Warg: -73.1103631777933
-Warbeast of Gorgoroth: -56.929167996458126
-Oliphaunt: -53.46866593840191
-Erebor Flamesmith: -51.323345887095854
-Haunt of the Dead Marshes: -43.5862379446809
-Easterling Vanguard: -41.09902409881342
-Book of Mazarbul: -31.63941093345577
-Sam's Desperate Rescue: -23.339958916565838
-Orcish Medicine: -16.209437753024307
-Gríma Wormtongue: -7.791387752441075
-Mauhúr, Uruk-hai Captain: -5.0752258235979895
-Gimli, Counter of Kills: -2.602063603539399
-Grond, the Gatebreaker: -1.6751391444659287
-Cast into the Fire: -0.6654494536540732
+Gimli's Fury: -140.51969042065338
+Relentless Rohirrim: -115.4975554166898
+Snarling Warg: -93.56672065411377
+Swarming of Moria: -92.06952902539332
+Olog-hai Crusher: -89.29149941902278
+Quarrel's End: -87.24490758664737
+Warbeast of Gorgoroth: -57.025879704694624
+Oliphaunt: -54.01644144544059
+Book of Mazarbul: -32.595273464756616
+Fiery Inscription: -8.432732446979731
+Gimli, Counter of Kills: -6.378629317323799
+Cast into the Fire: -4.514965442584849
 =============================
-Card Olog-hai Crusher
+Card Fire of Orthanc
 Rank 1 out of 62
-availability score: 2104.200906464754
+availability score: 1273.9277335350978
 -----------------------------
-Battle-Scarred Goblin: -185.17043070960244
-Haradrim Spearmaster: -144.115393784925
-Improvised Club: -122.37909157090223
-Warbeast of Gorgoroth: -114.50803950795806
-Quarrel's End: -104.60990120859965
-Oliphaunt: -86.73814713438843
-Fire of Orthanc: -58.38168208852225
-Shelob's Ambush: -56.23423201546649
-Rohirrim Lancer: -50.62138921601503
-Fear, Fire, Foes!: -42.938908437131104
-Rush the Room: -35.95066674642351
-Gimli's Fury: -35.33822499254806
-Relentless Rohirrim: -32.363198274652156
-Ranger's Firebrand: -30.628032740864754
-Swarming of Moria: -29.78311069834096
-Book of Mazarbul: -7.253477812575898
-Rising of the Day: -5.396767427588908
+Oliphaunt: -121.10957874385994
+Battle-Scarred Goblin: -117.79852284590913
+Olog-hai Crusher: -85.11185353991642
+Relentless Rohirrim: -84.74670337907801
+Fiery Inscription: -65.41308319557385
+Smite the Deathless: -62.404128696259576
+Foray of Orcs: -61.56251592721817
+Haradrim Spearmaster: -48.60737260119328
+Gollum's Bite: -35.184361722593735
+Gimli's Fury: -31.43535914811985
+Cast into the Fire: -27.23548993294045
+Swarming of Moria: -24.146350196279133
+Erkenbrand, Lord of Westfold: -19.246445535936694
+Erebor Flamesmith: -17.595627155043946
+Sam's Desperate Rescue: -15.760193280982172
+Ranger's Firebrand: -10.833150003101725
 =============================
-Card Rohirrim Lancer
+Card The Torment of Gollum
 Rank 2 out of 62
-availability score: 1916.3878320809567
+availability score: 1267.5961062597225
 -----------------------------
-Rally at the Hornburg: -227.0194679132047
-Relentless Rohirrim: -144.6446884933575
-Gimli's Fury: -112.79483835836683
-Battle-Scarred Goblin: -82.93643531973288
-Erebor Flamesmith: -80.40936878623387
-Improvised Club: -80.07871382327068
-Olog-hai Crusher: -67.69543203333907
-Sam's Desperate Rescue: -60.91203144283473
-Quarrel's End: -52.39864489982038
-Breaking of the Fellowship: -49.89561205805309
-Mordor Muster: -26.625847640984116
-Haradrim Spearmaster: -26.52267218512275
-Oliphaunt: -14.337753571568978
-Rising of the Day: -14.076207761328796
-Erkenbrand, Lord of Westfold: -6.870491760422701
-Orcish Medicine: -5.709705221135163
-Gimli's Axe: -1.8173030345575998
+Mordor Muster: -164.78175792471973
+Dunland Crebain: -163.1150296877362
+Uruk-hai Berserker: -117.37656910159485
+Lash of the Balrog: -98.78086449919184
+Easterling Vanguard: -77.72501505462074
+Orcish Medicine: -68.42112778739657
+Claim the Precious: -64.4725055527389
+Mirkwood Bats: -42.58349754937123
+Gollum, Patient Plotter: -24.25490591400036
+Snarling Warg: -23.01576958506537
+Shelob's Ambush: -18.660487947612246
+Gothmog, Morgul Lieutenant: -13.509844443602944
+Nazgûl: -12.91688848374785
+Haunt of the Dead Marshes: -9.38091284132216
+Troll of Khazad-dûm: -8.012724712617782
+Cirith Ungol Patrol: -5.286459494490904
+Mordor Trebuchet: -0.7487531061600592
 =============================
-Card Quarrel's End
+Card Dunland Crebain
 Rank 3 out of 62
-availability score: 1872.9644728849196
+availability score: 1008.957953315958
 -----------------------------
-Rally at the Hornburg: -319.74459129440294
-The Torment of Gollum: -161.14502148276054
-Relentless Rohirrim: -155.44727096749975
-Improvised Club: -135.790141043522
-Rohirrim Lancer: -130.25284782052302
-Erebor Flamesmith: -61.14082458328352
-Haradrim Spearmaster: -60.99550015265358
-Grishnákh, Brash Instigator: -34.744485741698234
-Rush the Room: -28.62160145581828
-Olog-hai Crusher: -22.758209269712083
-Battle-Scarred Goblin: -16.372307095393897
-Rising of the Day: -12.193016663961192
-Mordor Muster: -5.658524466860486
-Erkenbrand, Lord of Westfold: -4.689859827340724
+Claim the Precious: -175.4375404964445
+The Torment of Gollum: -139.37782895542446
+Uruk-hai Berserker: -91.77243951577948
+Easterling Vanguard: -83.75654764255623
+Shelob's Ambush: -73.69839936577856
+Haunt of the Dead Marshes: -70.04227404454878
+The Black Breath: -38.408577375503235
+Nazgûl: -31.063334394111106
+Mordor Muster: -12.528248258890061
+Bitter Downfall: -0.37061603836314205
+Mirkwood Bats: -0.3034494055206145
 =============================
 Card Gimli's Axe
 Rank 4 out of 62
-availability score: 1838.1396953077171
+availability score: 911.0249052248837
 -----------------------------
-Rally at the Hornburg: -190.67806500620466
-Rohirrim Lancer: -157.61053980479753
-Warbeast of Gorgoroth: -141.41775592003057
-Battle-Scarred Goblin: -129.1196831456094
-Haradrim Spearmaster: -106.7624113767572
-Erebor Flamesmith: -84.7201775200783
-Foray of Orcs: -84.69547216958478
-Swarming of Moria: -83.68590018804537
-Éomer of the Riddermark: -73.60714721459482
-Book of Mazarbul: -51.07008080186406
-Grishnákh, Brash Instigator: -34.56732694277898
-Oliphaunt: -33.955245952788395
-Gollum's Bite: -21.465730265300163
-Mordor Trebuchet: -15.009424251055
-Erkenbrand, Lord of Westfold: -14.307053835411663
-Claim the Precious: -10.631214108446002
-Haunt of the Dead Marshes: -8.637633164315384
-Breaking of the Fellowship: -1.220612562734473
+Rally at the Hornburg: -169.90377242060512
+Warbeast of Gorgoroth: -129.038517100643
+Foray of Orcs: -78.61362360618426
+Erebor Flamesmith: -75.1676815533423
+Swarming of Moria: -73.50541750587345
+Éomer of the Riddermark: -69.9102851868477
+Book of Mazarbul: -46.24888068864673
+Grishnákh, Brash Instigator: -28.430069658177626
+Oliphaunt: -25.837415221422894
 =============================
-Card Battle-Scarred Goblin
+Card Mordor Muster
 Rank 5 out of 62
-availability score: 1657.3726522955105
+availability score: 855.1470468614772
 -----------------------------
-Improvised Club: -138.62729897765064
-Smite the Deathless: -109.60053431097892
-Rohirrim Lancer: -79.90732575662666
-Quarrel's End: -78.73468012911803
-Haradrim Spearmaster: -77.2190387386403
-Erebor Flamesmith: -71.13727406158442
-Gimli's Fury: -53.89504124419422
-Relentless Rohirrim: -53.60812087826391
-Rally at the Hornburg: -51.12042325083859
-Warbeast of Gorgoroth: -46.84498493040496
-Shelob's Ambush: -32.815872674771754
-Olog-hai Crusher: -29.87193452925821
-Fire of Orthanc: -25.92467093035074
-Gimli's Axe: -20.797120647959627
-Oliphaunt: -18.447827793281135
-The Black Breath: -18.409818352875398
-Breaking of the Fellowship: -12.630490674493664
+The Torment of Gollum: -178.60911646973423
+Claim the Precious: -128.36669513625563
+Dunland Crebain: -99.09477843049478
+Easterling Vanguard: -91.28823031704705
+Uruk-hai Berserker: -61.35238618746973
+Haunt of the Dead Marshes: -45.630305020964265
+Morgul-Knife Wound: -14.615555929659404
+Snarling Warg: -10.539884963736025
+The Black Breath: -2.531356665129832
 =============================
-Card Fire of Orthanc
+Card Claim the Precious
 Rank 6 out of 62
-availability score: 1598.057255781318
+availability score: 832.3865377208072
 -----------------------------
-Oliphaunt: -119.28906548697842
-Battle-Scarred Goblin: -118.67143050810182
-Nasty End: -99.35408539693093
-Relentless Rohirrim: -83.8613896263625
-Olog-hai Crusher: -83.4927269451846
-Smite the Deathless: -65.54458191032987
-Fiery Inscription: -64.04933671058802
-Foray of Orcs: -62.70731204164535
-Improvised Club: -49.30363727491026
-Haradrim Spearmaster: -47.2371623344638
-Gollum's Bite: -33.574286939222524
-Gimli's Fury: -28.141135978231308
-Cast into the Fire: -26.710664318445108
-Swarming of Moria: -24.050295993681313
-Uruk-hai Berserker: -21.576805776649863
-Erkenbrand, Lord of Westfold: -18.068873969826047
-Erebor Flamesmith: -16.979052916146827
-Shelob's Ambush: -15.397075839368254
-Easterling Vanguard: -13.788526215134768
-Ranger's Firebrand: -10.983469049582911
-Gothmog, Morgul Lieutenant: -8.237546854156811
+Dunland Crebain: -196.55899672277474
+The Torment of Gollum: -175.67525311732206
+Shelob's Ambush: -56.81151175807157
+Sam's Desperate Rescue: -46.8479647460726
+Lash of the Balrog: -41.074136346696264
+Uruk-hai Berserker: -38.700763712601294
+Mordor Muster: -20.35560889931621
 =============================
 Card Gimli's Fury
 Rank 7 out of 62
-availability score: 1566.4362304427184
+availability score: 770.1843589565918
 -----------------------------
-Relentless Rohirrim: -116.80828808886451
-Smite the Deathless: -111.76565021521279
-Battle-Scarred Goblin: -107.26113672075792
-Rohirrim Lancer: -91.55064226598422
-Improvised Club: -80.82921618641545
-Fire of Orthanc: -72.48711649292363
-Rush the Room: -60.65967653280481
-Erebor Flamesmith: -57.273133805215906
-Mordor Trebuchet: -44.72136816756812
-Olog-hai Crusher: -43.9568133408828
-Book of Mazarbul: -37.23035988216199
-Fear, Fire, Foes!: -33.68236867513626
-Bitter Downfall: -32.45848488854768
-Warbeast of Gorgoroth: -30.50662204307998
-Gollum's Bite: -14.554614553118538
-Breaking of the Fellowship: -14.143027180839214
-Gothmog, Morgul Lieutenant: -8.8195811292242
-Gollum, Patient Plotter: -1.7758900670610638
-=============================
-Card Haradrim Spearmaster
-Rank 8 out of 62
-availability score: 1560.6237461150888
------------------------------
-Battle-Scarred Goblin: -129.7334945950105
-Relentless Rohirrim: -102.50878720840015
-Warbeast of Gorgoroth: -97.29436849861573
-Olog-hai Crusher: -90.59475759982901
-Improvised Club: -81.65540210816583
-Rally at the Hornburg: -70.18096459198767
-Rohirrim Lancer: -57.67608075436578
-Quarrel's End: -52.636441355529925
-The Black Breath: -49.098307420731395
-Fire of Orthanc: -27.708485003400828
-Gimli's Axe: -26.96674160882631
-Mauhúr, Uruk-hai Captain: -25.44276868654334
-Gollum, Patient Plotter: -18.69580663382607
-Mirkwood Bats: -12.198311159342463
-Grishnákh, Brash Instigator: -1.8644643479768124
-=============================
-Card Improvised Club
-Rank 9 out of 62
-availability score: 1360.7806448771234
------------------------------
-Rally at the Hornburg: -171.80937075217818
-The Torment of Gollum: -152.9467346264544
-Haradrim Spearmaster: -109.53589157684101
-Rohirrim Lancer: -104.96458358211848
-Cast into the Fire: -44.7330095302754
-Battle-Scarred Goblin: -41.22862120653042
-Quarrel's End: -40.80187083951852
-Olog-hai Crusher: -28.9855828809083
-Gimli's Fury: -17.18560650374806
-Erebor Flamesmith: -15.556890012323205
-Rush the Room: -14.969241289394377
-Breaking of the Fellowship: -14.69609623038086
-Fire of Orthanc: -7.72378304969827
-=============================
-Card Relentless Rohirrim
-Rank 10 out of 62
-availability score: 1349.1029324439353
------------------------------
-Rally at the Hornburg: -151.50677353006736
-Rohirrim Lancer: -98.15599694519209
-Quarrel's End: -93.9048683325404
-Shelob's Ambush: -64.19206414174377
-Battle-Scarred Goblin: -64.16788700935021
-Foray of Orcs: -45.44933718477166
-Olog-hai Crusher: -44.396376489060394
-Gimli's Fury: -42.7528906496692
-Breaking of the Fellowship: -39.139487023136574
-Ranger's Firebrand: -32.35303003735443
-Orcish Medicine: -29.893694538614543
-Fire of Orthanc: -27.51035099141352
-Rush the Room: -26.933414744956757
-Warbeast of Gorgoroth: -7.6758764962962225
-The Black Breath: -5.976365315230518
-Haradrim Spearmaster: -0.5442684845616306
-Smite the Deathless: -0.27713065010911847
-=============================
-Card Breaking of the Fellowship
-Rank 11 out of 62
-availability score: 1197.133538489584
------------------------------
-Rohirrim Lancer: -162.0927017699972
-Improvised Club: -144.7704080820293
-Battle-Scarred Goblin: -111.43774738686426
-Relentless Rohirrim: -71.09339724505753
-Mordor Muster: -57.87562765233207
-Rally at the Hornburg: -44.89722824936444
-Swarming of Moria: -42.31572770321833
-Voracious Fell Beast: -21.250356712457787
-Gimli's Axe: -17.765399754844726
-Oliphaunt: -9.785127378632252
-Gimli's Fury: -6.688024558633205
-Rising of the Day: -5.879685854234307
-=============================
-Card The Torment of Gollum
-Rank 12 out of 62
-availability score: 1085.8107033628633
------------------------------
-Mordor Muster: -123.65225451266934
-Dunland Crebain: -117.8846214904786
-Uruk-hai Berserker: -113.9052999141725
-Shelob's Ambush: -89.52526541070387
-Quarrel's End: -70.53431440226858
-Easterling Vanguard: -53.73146740235461
-Lash of the Balrog: -46.07877027684353
-Rally at the Hornburg: -42.905640425492045
-Cast into the Fire: -27.6919549988683
-Ranger's Firebrand: -6.3310367001382515
-Snarling Warg: -4.118516705645584
-Improvised Club: -1.0020094750770614
-=============================
-Card Shelob's Ambush
-Rank 13 out of 62
-availability score: 1058.2843144083051
------------------------------
-The Torment of Gollum: -176.286705620826
-Easterling Vanguard: -93.60496824160727
-Dunland Crebain: -81.458123609859
-Battle-Scarred Goblin: -70.60125404497136
-Relentless Rohirrim: -62.39081083868949
-Lash of the Balrog: -61.55647857678548
-Haunt of the Dead Marshes: -46.586983557613884
-Grishnákh, Brash Instigator: -36.72085765677724
-Fire of Orthanc: -25.467545666872287
-Mordor Trebuchet: -14.349381588550928
-Fear, Fire, Foes!: -9.828070170360151
-Olog-hai Crusher: -8.033768067775462
-Voracious Fell Beast: -7.281195212831427
-Cast into the Fire: -2.595849574177771
-=============================
-Card Rally at the Hornburg
-Rank 14 out of 62
-availability score: 1035.189787200871
------------------------------
-Improvised Club: -122.67084727630389
-The Torment of Gollum: -73.8753102954537
-Rohirrim Lancer: -69.4708289967877
-Relentless Rohirrim: -47.56371882947005
-Battle-Scarred Goblin: -43.15017861735476
-Ranger's Firebrand: -41.97639875643747
-Mordor Muster: -35.09495076316863
-Gimli's Axe: -33.47152107655246
-Oliphaunt: -28.264478240166163
-Book of Mazarbul: -27.935581626022014
-The Black Breath: -19.8519267996987
-Warbeast of Gorgoroth: -19.135219691420026
-Erebor Flamesmith: -18.03591870198227
-Quarrel's End: -12.241735693666561
-Haradrim Spearmaster: -11.333194581172815
-Smite the Deathless: -9.777396039177104
-Breaking of the Fellowship: -8.027992926542902
-Uruk-hai Berserker: -7.957446367880925
-Rush the Room: -4.032011308265613
-Fiery Inscription: -1.6733669117211027
-=============================
-Card Warbeast of Gorgoroth
-Rank 15 out of 62
-availability score: 1033.3364107614454
------------------------------
-Battle-Scarred Goblin: -96.50497841560946
-Rally at the Hornburg: -73.52396420086704
-Relentless Rohirrim: -68.71043902866174
-Olog-hai Crusher: -60.685434255467484
-Rush the Room: -60.51061596255598
-Gimli's Fury: -52.413124302514795
-Gimli's Axe: -40.609317190832456
-Rising of the Day: -32.040266931375655
-Smite the Deathless: -29.93711189920031
-Book of Mazarbul: -29.332893043721757
-Foray of Orcs: -21.394117747289116
-Goblin Fireleaper: -19.530079005747794
-Fear, Fire, Foes!: -13.482957453199214
-Erkenbrand, Lord of Westfold: -12.489767887958903
-Haradrim Spearmaster: -12.25271348977866
-Gimli, Counter of Kills: -6.562825740904243
-=============================
-Card Erebor Flamesmith
-Rank 16 out of 62
-availability score: 1015.5664203573601
------------------------------
-Rally at the Hornburg: -158.47285233142276
-Improvised Club: -86.1404981656558
-Rohirrim Lancer: -49.74557693712032
-Grishnákh, Brash Instigator: -42.76328096862738
-Fire of Orthanc: -42.50353089956947
-Gimli's Axe: -41.738797933799816
-Quarrel's End: -41.45393756446017
-Book of Mazarbul: -38.81739544424616
-Cast into the Fire: -35.72936833662709
-Battle-Scarred Goblin: -35.59179601259249
-Fiery Inscription: -21.35644444241653
-Nazgûl: -19.38087583540969
-Haunt of the Dead Marshes: -17.40092804538353
-Gimli's Fury: -11.708766833593828
-Nasty End: -7.9789070270526885
-Swarming of Moria: -3.584785131140091
-Rush the Room: -0.4180717395231852
-=============================
-Card Dunland Crebain
-Rank 17 out of 62
-availability score: 996.4929904102341
------------------------------
-Shelob's Ambush: -114.22658118890206
-The Torment of Gollum: -111.3295559553338
-Uruk-hai Berserker: -93.56698882718015
-Claim the Precious: -90.73196676732395
-Easterling Vanguard: -72.34861815699865
-The Black Breath: -58.9592314463598
-Haunt of the Dead Marshes: -42.894667900331186
-Cast into the Fire: -25.965145884691175
-Ranger's Firebrand: -2.04090607597347
-=============================
-Card Oliphaunt
-Rank 18 out of 62
-availability score: 964.737832227162
------------------------------
-Rally at the Hornburg: -116.80603660279415
-Rush the Room: -89.72131216127171
-Olog-hai Crusher: -65.90289083915276
-Rohirrim Lancer: -58.77616935326545
-Fire of Orthanc: -48.06119310848153
-Cast into the Fire: -27.95304456428235
-Gimli's Axe: -24.305446605616478
-Breaking of the Fellowship: -22.799468287772665
-Battle-Scarred Goblin: -21.435478480469197
-Rising of the Day: -18.022236050829967
-Voracious Fell Beast: -13.432593352208585
-Fear, Fire, Foes!: -1.5790362674290104
-=============================
-Card Cast into the Fire
-Rank 19 out of 62
-availability score: 895.8197835092345
------------------------------
-Improvised Club: -83.77200432547829
-Rush the Room: -78.03532099685103
-Oliphaunt: -77.27189658796603
-Claim the Precious: -68.99220079376173
-The Torment of Gollum: -50.32469897233771
-Dunland Crebain: -47.38322126759628
-Shelob's Ambush: -45.54827763168578
-Book of Mazarbul: -37.33977297654344
-Uruk-hai Berserker: -23.61181226221826
-Fire of Orthanc: -22.21670926175148
-Erebor Flamesmith: -16.21119682439495
-Uglúk of the White Hand: -15.39698485450512
-Goblin Fireleaper: -6.440579078772929
-Rising of the Day: -5.3959931896923745
-Lash of the Balrog: -2.645855583416072
-=============================
-Card Swarming of Moria
-Rank 20 out of 62
-availability score: 869.5374244910283
------------------------------
-Rush the Room: -147.7317047862273
-Fire of Orthanc: -55.33319036686507
-Fiery Inscription: -55.26065763353437
-Olog-hai Crusher: -50.64150024609178
-Gimli's Axe: -46.04488229495184
-Breaking of the Fellowship: -33.49254467449288
-Erebor Flamesmith: -22.523712887731985
-Grishnákh, Brash Instigator: -17.168949463275926
-Orcish Medicine: -16.779376573529426
-=============================
-Card Uruk-hai Berserker
-Rank 21 out of 62
-availability score: 862.4888821587726
------------------------------
-The Torment of Gollum: -216.14075279678735
-Easterling Vanguard: -94.69671968298536
-Rally at the Hornburg: -62.677997178108846
-Smite the Deathless: -53.25593981982554
-Cast into the Fire: -40.1582322122799
-Snarling Warg: -36.99918490153235
-Fire of Orthanc: -18.879165194304708
-Dunland Crebain: -18.109683141258937
-Claim the Precious: -9.3920370018703
-Foray of Orcs: -2.5420727926514703
-=============================
-Card Mordor Muster
-Rank 22 out of 62
-availability score: 835.0672898027248
------------------------------
-Rally at the Hornburg: -174.77526332894774
-The Torment of Gollum: -167.73464281368652
-Quarrel's End: -61.358044120907415
-Rohirrim Lancer: -44.60817134952372
-Easterling Vanguard: -29.615062392863134
-Breaking of the Fellowship: -20.279534051866673
-The Black Breath: -14.461981344104524
-Rising of the Day: -8.922142977576009
-Morgul-Knife Wound: -2.0547394147884797
+Smite the Deathless: -106.34444767562667
+Battle-Scarred Goblin: -91.06075720194978
+Rohirrim Lancer: -80.52209707703892
+Fire of Orthanc: -65.6960780603428
+Rush the Room: -53.979524568083676
+Bitter Downfall: -32.52330792609429
+Book of Mazarbul: -32.058542620425584
+Fear, Fire, Foes!: -30.804256158456123
+Warbeast of Gorgoroth: -18.214131859689534
 =============================
 Card Easterling Vanguard
-Rank 23 out of 62
-availability score: 818.2599087722032
+Rank 8 out of 62
+availability score: 766.6893094782304
 -----------------------------
-The Torment of Gollum: -173.12440982911482
-Dunland Crebain: -126.79480956591999
-Shelob's Ambush: -123.62448069078326
-Fire of Orthanc: -39.463824259086394
-Snarling Warg: -27.460545749319024
-Uruk-hai Berserker: -3.3651346661304817
-Mordor Muster: -2.8650075022574795
-Fear, Fire, Foes!: -2.3540444071179074
-Rush the Room: -0.6570555994034954
+Dunland Crebain: -173.1689078342645
+The Torment of Gollum: -168.18442472375872
+Shelob's Ambush: -94.40255390641137
+Snarling Warg: -39.048602150951616
+Mordor Muster: -25.956421720829916
+Voracious Fell Beast: -20.396570434943563
+Gothmog, Morgul Lieutenant: -3.287166448596409
 =============================
-Card Rising of the Day
-Rank 24 out of 62
-availability score: 616.8907329426657
+Card Oliphaunt
+Rank 9 out of 62
+availability score: 701.4491297671635
 -----------------------------
-Rohirrim Lancer: -61.746049862324746
-Warbeast of Gorgoroth: -54.898690121456546
-Quarrel's End: -49.657912553411165
-Cast into the Fire: -35.48613456197455
-Olog-hai Crusher: -31.144214849817338
-Gothmog, Morgul Lieutenant: -29.573667410591867
-Morgul-Knife Wound: -20.895052830497246
-Breaking of the Fellowship: -19.648450318077213
-Goblin Fireleaper: -11.925901493598124
-Mordor Muster: -10.16133856547025
-Haunt of the Dead Marshes: -9.477659287570521
-Grond, the Gatebreaker: -7.444598113921936
-Oliphaunt: -6.303907472637442
-Foray of Orcs: -6.301897567814317
-Éomer of the Riddermark: -1.822209668385511
+Rally at the Hornburg: -110.18931804765613
+Smite the Deathless: -92.4600848453145
+Rush the Room: -79.28298094137332
+Fire of Orthanc: -45.354050150938136
+Rohirrim Lancer: -38.69445790818787
+Olog-hai Crusher: -35.89811408234654
+Rising of the Day: -9.977343942928288
+Gimli's Axe: -3.2715192221541747
+=============================
+Card Shelob's Ambush
+Rank 10 out of 62
+availability score: 689.4075255187821
+-----------------------------
+The Torment of Gollum: -154.3983585157193
+Lash of the Balrog: -90.73397645063407
+Easterling Vanguard: -75.02374929827138
+Dunland Crebain: -58.07390601638085
+Haunt of the Dead Marshes: -38.07865134236989
+Mordor Trebuchet: -30.1890331819224
+Claim the Precious: -17.991320362138538
+Voracious Fell Beast: -6.519004381721123
+=============================
+Card Olog-hai Crusher
+Rank 11 out of 62
+availability score: 677.4696775079797
+-----------------------------
+Haradrim Spearmaster: -113.40134159342834
+Improvised Club: -93.09784333782393
+Oliphaunt: -70.42970957015685
+Fire of Orthanc: -35.86783802126566
+Fear, Fire, Foes!: -34.16134949346174
+Rohirrim Lancer: -17.29250415904065
+Relentless Rohirrim: -11.779397868093088
+Rush the Room: -7.638961405320461
+Rising of the Day: -0.37069850831250406
+Swarming of Moria: -0.36232573376332056
+=============================
+Card Uruk-hai Berserker
+Rank 12 out of 62
+availability score: 625.0198438462784
+-----------------------------
+The Torment of Gollum: -221.59843404346805
+Dunland Crebain: -94.46527929712641
+Claim the Precious: -59.83917977313173
+Snarling Warg: -44.6347288424717
+Nazgûl: -25.386861818782087
+Gollum, Patient Plotter: -21.072411440185533
+Gothmog, Morgul Lieutenant: -17.7969911401509
+Mirkwood Bats: -12.367573705034692
+Mordor Muster: -0.4752927689686466
+=============================
+Card Troll of Khazad-dûm
+Rank 13 out of 62
+availability score: 618.691428279421
+-----------------------------
+The Torment of Gollum: -243.69984812382188
+Sam's Desperate Rescue: -127.22458608739328
 =============================
 Card Snarling Warg
-Rank 25 out of 62
-availability score: 611.6569668997334
+Rank 14 out of 62
+availability score: 616.43623956787
 -----------------------------
-Uruk-hai Berserker: -119.58364177764591
-Rush the Room: -106.74081090529062
-Easterling Vanguard: -77.91899696136814
-The Torment of Gollum: -32.27213581193379
-Fiery Inscription: -19.1233738458998
-Bitter Downfall: -13.915669821936866
+Uruk-hai Berserker: -130.7780396322852
+Easterling Vanguard: -78.5102132320245
+The Torment of Gollum: -77.95091136227717
+Rush the Room: -49.73892773693981
+Nazgûl: -36.76566322197521
+Mordor Muster: -27.454703022901104
+Bitter Downfall: -19.08798132178622
+Fiery Inscription: -16.80496119292396
 =============================
-Card Haunt of the Dead Marshes
-Rank 26 out of 62
-availability score: 563.3915797854912
+Card Rohirrim Lancer
+Rank 15 out of 62
+availability score: 612.4516683736505
 -----------------------------
-Dunland Crebain: -82.80675898810196
-Erebor Flamesmith: -80.94522402663203
-Rush the Room: -68.05725161464908
-Shelob's Ambush: -63.07878970097158
-Rising of the Day: -39.200909320916736
-Gimli's Axe: -0.4744657114955473
-Lash of the Balrog: -0.22413602164439794
+Gimli's Fury: -79.39481262747883
+Erebor Flamesmith: -66.9281701060645
+Relentless Rohirrim: -50.16496561041576
+Improvised Club: -48.41959687301886
+Olog-hai Crusher: -29.492593667981804
+Battle-Scarred Goblin: -11.183349754294241
+Breaking of the Fellowship: -9.992367473708002
+Rising of the Day: -6.115713711709986
+Quarrel's End: -5.008480776727312
+Oliphaunt: -3.605072881947093
 =============================
-Card Smite the Deathless
-Rank 27 out of 62
-availability score: 527.8188002093112
+Card Swarming of Moria
+Rank 16 out of 62
+availability score: 546.07791497247
 -----------------------------
-Rally at the Hornburg: -77.75153148226626
-Relentless Rohirrim: -76.342494619784
-Uruk-hai Berserker: -58.514915964561354
-Gimli's Fury: -24.845665855315396
-Fire of Orthanc: -22.368154364764234
-Troll of Khazad-dûm: -14.79158054554947
-Warbeast of Gorgoroth: -14.376495938787462
-Battle-Scarred Goblin: -11.615299362275413
-Mirkwood Bats: -2.132460768599409
+Rush the Room: -134.5174475987251
+Fiery Inscription: -46.11348641077066
+Fire of Orthanc: -37.77713361267013
+Gimli's Axe: -27.059894020729907
+Olog-hai Crusher: -14.228972879179036
+Breaking of the Fellowship: -13.888607196916752
 =============================
-Card Foray of Orcs
-Rank 28 out of 62
-availability score: 466.18815252056226
+Card Erebor Flamesmith
+Rank 17 out of 62
+availability score: 493.6855341681646
 -----------------------------
-Fire of Orthanc: -53.70844053808876
-Relentless Rohirrim: -44.56136522195165
-Gimli's Axe: -37.8601578445758
-Warbeast of Gorgoroth: -30.447561533731733
-Nasty End: -30.446548844458597
-Uruk-hai Berserker: -17.005028125056853
-Rising of the Day: -10.694927763125634
-Lash of the Balrog: -7.93194857571904
-Fear, Fire, Foes!: -3.4998007697734916
+Rally at the Hornburg: -132.24679594877674
+Grishnákh, Brash Instigator: -45.238379005390435
+Gimli's Axe: -39.30358816857215
+Battle-Scarred Goblin: -30.424102499376488
+Fire of Orthanc: -30.22896993872042
+Rohirrim Lancer: -28.84827594255775
+Cast into the Fire: -4.569803935164144
+Quarrel's End: -2.9573525072333493
+Foray of Orcs: -2.0848374344128207
+=============================
+Card Rising of the Day
+Rank 18 out of 62
+availability score: 460.2100803924699
+-----------------------------
+Rohirrim Lancer: -57.9050168359409
+Warbeast of Gorgoroth: -51.542444043737
+Quarrel's End: -44.62827670998156
+Cast into the Fire: -29.326200811101987
+Gothmog, Morgul Lieutenant: -25.901070096142718
+Olog-hai Crusher: -23.372828268901678
+Breaking of the Fellowship: -15.787100555514781
+Goblin Fireleaper: -7.598394525707349
+Foray of Orcs: -4.386027389723253
+Grond, the Gatebreaker: -2.4839928475560678
+Éomer of the Riddermark: -2.200913712948724
+Oliphaunt: -0.11242567717546414
 =============================
 Card Lash of the Balrog
-Rank 29 out of 62
-availability score: 423.1201275699326
+Rank 19 out of 62
+availability score: 451.4079496898512
 -----------------------------
-The Torment of Gollum: -231.6866381183965
-Cast into the Fire: -11.276003848478899
-Shelob's Ambush: -11.25532918046915
-Haunt of the Dead Marshes: -8.0275372509629
-Foray of Orcs: -7.713375924693424
+The Torment of Gollum: -235.68935537302622
+Gollum's Bite: -49.420653776757476
+Claim the Precious: -25.113871834406414
+Shelob's Ambush: -22.276972698306412
+Oath of the Grey Host: -13.829536753784266
 =============================
-Card Book of Mazarbul
-Rank 30 out of 62
-availability score: 338.9399694518863
+Card Haunt of the Dead Marshes
+Rank 20 out of 62
+availability score: 438.27845479542367
 -----------------------------
-Gimli's Fury: -53.40218147327122
-Gimli's Axe: -24.55652866950661
-Rush the Room: -22.383065374977573
-Olog-hai Crusher: -20.91800728875944
-Rally at the Hornburg: -13.440455834219367
-Cast into the Fire: -7.7086333395325966
-Warbeast of Gorgoroth: -6.954463001141285
-Mirkwood Bats: -4.745494726305636
-Erebor Flamesmith: -0.8623932370452749
+Dunland Crebain: -111.3481965310238
+The Torment of Gollum: -90.72941978176407
+Shelob's Ambush: -67.97845641991792
+Mordor Muster: -25.053871561882897
+Nazgûl: -15.746134697247534
 =============================
-Card Fiery Inscription
-Rank 31 out of 62
-availability score: 328.1719829344588
+Card Foray of Orcs
+Rank 21 out of 62
+availability score: 414.9327698088307
 -----------------------------
-Fire of Orthanc: -70.78786895627928
-Swarming of Moria: -28.454014698076797
-Snarling Warg: -22.755204246368656
-Erebor Flamesmith: -19.35352742811539
-Éomer of the Riddermark: -15.395570372738982
-Grond, the Gatebreaker: -11.126140143740999
-Rally at the Hornburg: -6.138472126446348
-Oath of the Grey Host: -4.138920487728136
-Ranger's Firebrand: -1.3236669134695669
-Claim the Precious: -0.7926807732633332
+Fire of Orthanc: -54.455622143344044
+Relentless Rohirrim: -42.173757765080204
+Gimli's Axe: -34.55419599427607
+Smite the Deathless: -32.484121290785595
+Warbeast of Gorgoroth: -30.17702541331728
+Fear, Fire, Foes!: -22.086225408088207
+Erebor Flamesmith: -11.600099328591861
+Rising of the Day: -10.404309292383495
 =============================
-Card Orcish Medicine
-Rank 32 out of 62
-availability score: 291.91390072876226
+Card Nazgûl
+Rank 22 out of 62
+availability score: 374.71282105815845
 -----------------------------
-Rohirrim Lancer: -68.66745159473895
-Rush the Room: -43.18659135338022
-Gollum's Bite: -34.57517900033174
-Bitter Downfall: -28.034741387041716
-Uglúk of the White Hand: -20.352231071888447
-Mordor Trebuchet: -10.367810493591307
-Swarming of Moria: -6.289446543613852
-Relentless Rohirrim: -3.8493103741391144
+Cirith Ungol Patrol: -68.37641668561311
+Dunland Crebain: -57.93782560963067
+Uruk-hai Berserker: -44.74928479469536
+Mordor Trebuchet: -26.963863485980728
+The Torment of Gollum: -13.827914140768781
+Gorbag of Minas Morgul: -8.871960441283093
+Snarling Warg: -8.385262927025149
+Haunt of the Dead Marshes: -5.331448444653375
+=============================
+Card Quarrel's End
+Rank 23 out of 62
+availability score: 373.98154872527476
+-----------------------------
+Relentless Rohirrim: -82.76540020374313
+Rohirrim Lancer: -63.857971180370875
+Grishnákh, Brash Instigator: -31.782022183267596
+Erebor Flamesmith: -23.429165779543986
+Haradrim Spearmaster: -13.427142091694664
+Rush the Room: -8.256300580607624
+Rising of the Day: -7.246845396497382
+=============================
+Card Mirkwood Bats
+Rank 24 out of 62
+availability score: 358.3803548112202
+-----------------------------
+The Torment of Gollum: -133.04946868897096
+Dunland Crebain: -99.11549550990885
+Uruk-hai Berserker: -32.34005955395749
+=============================
+Card Cirith Ungol Patrol
+Rank 25 out of 62
+availability score: 334.03988987619203
+-----------------------------
+The Torment of Gollum: -209.4160667973378
+Nazgûl: -30.55241870633642
+Voracious Fell Beast: -10.70309146054032
+Gollum's Bite: -1.710908406151363
+=============================
+Card Improvised Club
+Rank 26 out of 62
+availability score: 323.28421927549874
+-----------------------------
+Rally at the Hornburg: -107.6003197831771
+Haradrim Spearmaster: -62.241377409890674
+Rohirrim Lancer: -25.298197100804455
+Olog-hai Crusher: -0.6327815134638313
 =============================
 Card Mordor Trebuchet
-Rank 33 out of 62
-availability score: 291.4209995403755
+Rank 27 out of 62
+availability score: 321.07300611904907
 -----------------------------
-Shelob's Ambush: -50.26486266406749
-Rush the Room: -42.43918572331201
-Gimli's Fury: -26.486528730202735
-Orcish Medicine: -7.369209806782283
-Gimli's Axe: -5.536220019106921
+The Torment of Gollum: -91.58279041453913
+Shelob's Ambush: -86.74407266705751
+Nazgûl: -6.527685764742431
+=============================
+Card Haradrim Spearmaster
+Rank 28 out of 62
+availability score: 311.3678706999225
+-----------------------------
+Battle-Scarred Goblin: -71.47886165424543
+Olog-hai Crusher: -44.05118805276809
+Improvised Club: -37.384610628705396
+Quarrel's End: -4.083742393579398
+Fire of Orthanc: -1.1648267893592115
+=============================
+Card Gothmog, Morgul Lieutenant
+Rank 29 out of 62
+availability score: 276.2607257634652
+-----------------------------
+The Torment of Gollum: -76.34724521495139
+Uruk-hai Berserker: -49.45828042270786
+Easterling Vanguard: -24.09698101451936
+Morgul-Knife Wound: -19.11965639419785
+Gollum's Bite: -7.609070492114835
+Rising of the Day: -6.135184030422783
+=============================
+Card Fiery Inscription
+Rank 30 out of 62
+availability score: 270.41879960550233
+-----------------------------
+Fire of Orthanc: -72.08527391295875
+Swarming of Moria: -36.13892758171817
+Éomer of the Riddermark: -20.119066557111715
+Snarling Warg: -7.122743279368088
+Rush the Room: -5.074623726859791
+Ranger's Firebrand: -2.2964033968372393
+Oath of the Grey Host: -0.14800133352150757
+=============================
+Card Bitter Downfall
+Rank 31 out of 62
+availability score: 249.85141769277467
+-----------------------------
+Dunland Crebain: -70.89920622504968
+Snarling Warg: -31.41455195488442
+Morgul-Knife Wound: -23.34889612557925
+Orcish Medicine: -15.284745547779531
+Gimli's Fury: -9.731327920423842
+Voracious Fell Beast: -7.4051249561979215
+Grond, the Gatebreaker: -3.0446498817307397
+=============================
+Card Breaking of the Fellowship
+Rank 32 out of 62
+availability score: 249.20290961938645
+-----------------------------
+Rohirrim Lancer: -127.02614950715773
+Swarming of Moria: -11.204542407993415
+Rising of the Day: -3.3716943007222975
+=============================
+Card Battle-Scarred Goblin
+Rank 33 out of 62
+availability score: 247.1505543888676
+-----------------------------
+Erebor Flamesmith: -59.920643757667634
+Rohirrim Lancer: -35.35668559634717
+Haradrim Spearmaster: -19.72639688468474
+Gimli's Fury: -7.011091617095944
+Relentless Rohirrim: -5.573415814592353
+Fire of Orthanc: -2.083900793149775
 =============================
 Card Fear, Fire, Foes!
 Rank 34 out of 62
-availability score: 286.76623449149645
+availability score: 234.34138616065917
 -----------------------------
-Shelob's Ambush: -37.071795111062876
-Warbeast of Gorgoroth: -33.227898487768584
-Olog-hai Crusher: -27.772101681769314
-Foray of Orcs: -20.115819120871137
-Gimli's Fury: -18.295492847247534
-Oliphaunt: -14.331875356603133
-Easterling Vanguard: -3.758090105301819
+Warbeast of Gorgoroth: -54.15060677784902
+Foray of Orcs: -37.20731303815283
+Olog-hai Crusher: -34.862003015162
+Gimli's Fury: -13.213379558769397
+Ranger's Firebrand: -10.392198712973338
 =============================
-Card The Black Breath
+Card Cast into the Fire
 Rank 35 out of 62
-availability score: 249.9553596764255
+availability score: 206.5139087326072
 -----------------------------
-Rally at the Hornburg: -74.57617154359883
-Mordor Muster: -27.969754091306875
-Éomer of the Riddermark: -21.13956043866398
-Battle-Scarred Goblin: -19.8819701480649
-Haradrim Spearmaster: -12.846055354608783
-Dunland Crebain: -11.898410325705576
-Relentless Rohirrim: -10.117243140611432
+Rush the Room: -69.27372131585655
+Fire of Orthanc: -11.832771217274116
+Erebor Flamesmith: -7.2795649005519145
+Rising of the Day: -3.825183938586452
+=============================
+Card Book of Mazarbul
+Rank 36 out of 62
+availability score: 203.31514648210475
+-----------------------------
+Gimli's Fury: -40.0518895945366
+Rush the Room: -27.609424565690052
+Gimli's Axe: -17.86093986929658
+Rally at the Hornburg: -3.8995740359849798
+=============================
+Card Rally at the Hornburg
+Rank 37 out of 62
+availability score: 190.4127898598266
+-----------------------------
+Improvised Club: -64.94458569549757
+Ranger's Firebrand: -45.62100483113658
+Oliphaunt: -25.402288824364625
+Book of Mazarbul: -19.852399841472852
+Erebor Flamesmith: -3.0524812717698495
+Gimli's Axe: -1.9101996683109128
 =============================
 Card Gollum's Bite
-Rank 36 out of 62
-availability score: 237.81353181052089
+Rank 38 out of 62
+availability score: 175.45636447589013
 -----------------------------
-Fire of Orthanc: -28.713622237096665
-Gimli's Axe: -23.250171087065006
-Sam's Desperate Rescue: -22.07491935789985
-Gimli's Fury: -21.59661854222778
-Orcish Medicine: -12.033909263839227
+Cirith Ungol Patrol: -33.37822298569568
+Sam's Desperate Rescue: -19.5276208525006
+The Black Breath: -15.565999901672184
+Orcish Medicine: -10.317866717631055
+Gothmog, Morgul Lieutenant: -9.716645090258888
+Lash of the Balrog: -2.975123500177416
+Fire of Orthanc: -2.7941845244455887
+=============================
+Card Relentless Rohirrim
+Rank 39 out of 62
+availability score: 171.13325351397205
+-----------------------------
+Foray of Orcs: -52.43447195106883
+Rohirrim Lancer: -33.22063635198172
+Olog-hai Crusher: -15.838760951580309
+Fire of Orthanc: -11.244457122779606
+Quarrel's End: -6.7652977407569885
+Rush the Room: -6.29873018584254
+Battle-Scarred Goblin: -2.6900315245997137
 =============================
 Card Grishnákh, Brash Instigator
-Rank 37 out of 62
-availability score: 230.9395014349244
+Rank 40 out of 62
+availability score: 168.23539308597682
 -----------------------------
-Erebor Flamesmith: -48.74059896690841
-Quarrel's End: -47.38614078581604
-Shelob's Ambush: -11.01920060063338
-Gimli's Axe: -4.736754326785639
-Haradrim Spearmaster: -4.504264887650541
-Swarming of Moria: -1.9122565117410883
-=============================
-Card Claim the Precious
-Rank 38 out of 62
-availability score: 230.41057548572513
------------------------------
-Dunland Crebain: -130.38261997054096
-Uruk-hai Berserker: -30.76998906915962
-Fiery Inscription: -16.33282438597211
-Gimli's Axe: -12.412200070828728
-Cast into the Fire: -4.38378101128388
+Erebor Flamesmith: -45.61539163084867
+Quarrel's End: -34.8587440523912
+Gimli's Axe: -5.920483454382605
 =============================
 Card Goblin Fireleaper
-Rank 39 out of 62
-availability score: 200.01187436222483
+Rank 41 out of 62
+availability score: 164.94154649226812
 -----------------------------
-Warbeast of Gorgoroth: -88.89707269464232
-Rising of the Day: -12.282677696299977
-Cast into the Fire: -3.6382582824420338
+Warbeast of Gorgoroth: -75.99076582972917
+Rising of the Day: -11.747900458428175
 =============================
 Card Voracious Fell Beast
-Rank 40 out of 62
-availability score: 193.27122688705305
------------------------------
-Shelob's Ambush: -38.20875995444809
-Breaking of the Fellowship: -29.806473400435202
-Cirith Ungol Patrol: -22.018081491961205
-Gríma Wormtongue: -5.079228012760442
-Oliphaunt: -4.550207133150437
-=============================
-Card Bitter Downfall
-Rank 41 out of 62
-availability score: 182.51412431339475
------------------------------
-Gimli's Fury: -44.14826009307338
-Snarling Warg: -17.094083898887295
-Morgul-Knife Wound: -14.563529986189923
-Grond, the Gatebreaker: -5.965992942119827
-Orcish Medicine: -4.985237621522798
-=============================
-Card Erkenbrand, Lord of Westfold
 Rank 42 out of 62
-availability score: 168.34773207980072
+availability score: 164.48843838001065
 -----------------------------
-Quarrel's End: -27.373711194055712
-Rohirrim Lancer: -17.555655308687584
-Nasty End: -13.817641635294997
-Fire of Orthanc: -12.586920315949513
-Warbeast of Gorgoroth: -9.110155603500694
-Gollum, Patient Plotter: -5.265975628420845
-Gimli's Axe: -2.744122314581963
+Shelob's Ambush: -46.776047727595916
+Cirith Ungol Patrol: -20.317130101332335
+Easterling Vanguard: -12.819601318312014
+Gríma Wormtongue: -9.283971673437524
+Bitter Downfall: -8.38766632371137
+=============================
+Card Warbeast of Gorgoroth
+Rank 43 out of 62
+availability score: 133.49974097756368
+-----------------------------
+Rising of the Day: -27.7599652705245
+Rush the Room: -26.662828565756946
+Goblin Fireleaper: -12.123455559491743
+Foray of Orcs: -10.851807938010396
+Gimli's Fury: -9.019465736813189
+Erkenbrand, Lord of Westfold: -7.463773068127743
+Gimli's Axe: -5.879953453068183
+Fear, Fire, Foes!: -1.395093554283136
+=============================
+Card Smite the Deathless
+Rank 44 out of 62
+availability score: 119.28646491029994
+-----------------------------
+Gimli's Fury: -20.249480564288973
+Oliphaunt: -19.07682951875688
+Fire of Orthanc: -14.93317406761764
+Foray of Orcs: -4.850633805028221
+Ranger's Firebrand: -3.3929350948644004
+=============================
+Card The Black Breath
+Rank 45 out of 62
+availability score: 92.72195440294021
+-----------------------------
+Mordor Muster: -46.71494578581563
+Dunland Crebain: -19.932726216150996
+Gollum's Bite: -7.185111143885502
+Éomer of the Riddermark: -0.3266530315160088
 =============================
 Card Ranger's Firebrand
-Rank 43 out of 62
-availability score: 151.97781613048085
+Rank 46 out of 62
+availability score: 83.88140784204995
 -----------------------------
-The Torment of Gollum: -42.52236919749646
-Rally at the Hornburg: -27.637359287966774
-Dunland Crebain: -23.356733793290015
-Gothmog, Morgul Lieutenant: -7.122062244612155
-Fire of Orthanc: -6.281098876042686
-Fiery Inscription: -4.274005382255182
-Relentless Rohirrim: -1.6120109018620683
-Olog-hai Crusher: -0.2222199011909547
+Smite the Deathless: -34.77397210193137
+Rally at the Hornburg: -33.19368399391209
+Fear, Fire, Foes!: -2.7546634675330104
+Fiery Inscription: -2.610672420137545
+Erkenbrand, Lord of Westfold: -0.6234816281772577
+Fire of Orthanc: -0.3505885454717524
 =============================
 Card Sam's Desperate Rescue
-Rank 44 out of 62
-availability score: 145.27327929117487
------------------------------
-Rohirrim Lancer: -41.93502193964609
-Gollum's Bite: -36.88113966855988
-Rush the Room: -25.18304539828554
-=============================
-Card Gollum, Patient Plotter
-Rank 45 out of 62
-availability score: 122.51726295300126
------------------------------
-Gimli's Fury: -27.962579245815228
-Haradrim Spearmaster: -23.144827526697224
-Gimli, Counter of Kills: -16.54533661961473
-Erkenbrand, Lord of Westfold: -5.374743051928678
-March from the Black Gate: -0.3523453845758904
-=============================
-Card Nazgûl
-Rank 46 out of 62
-availability score: 122.20724538232776
------------------------------
-Cirith Ungol Patrol: -55.388649942865236
-Erebor Flamesmith: -3.5087548746383823
-Gorbag of Minas Morgul: -2.62509175520122
-=============================
-Card Nasty End
 Rank 47 out of 62
-availability score: 113.27528802387022
+availability score: 79.37900253063397
 -----------------------------
-Erebor Flamesmith: -46.47484770855785
-Foray of Orcs: -14.195871497002043
-Fire of Orthanc: -7.8805371482993785
-Erkenbrand, Lord of Westfold: -3.4422577054119623
-=============================
-Card Gothmog, Morgul Lieutenant
-Rank 48 out of 62
-availability score: 86.8782985190477
------------------------------
-Gimli's Fury: -21.53710696858412
-Morgul-Knife Wound: -11.298677941261733
-Rising of the Day: -9.603787932906409
-Fire of Orthanc: -2.5325803781827227
-Ranger's Firebrand: -0.9993903399878148
-=============================
-Card Éomer of the Riddermark
-Rank 49 out of 62
-availability score: 76.16586141085746
------------------------------
-The Black Breath: -19.46554299591735
-Rising of the Day: -17.793606976364487
-Gimli's Axe: -7.09091640488647
-Fiery Inscription: -5.473474245766951
-=============================
-Card Mauhúr, Uruk-hai Captain
-Rank 50 out of 62
-availability score: 65.62235279907351
------------------------------
-Rush the Room: -23.626292741453938
-Haradrim Spearmaster: -5.241303063580444
-=============================
-Card Gríma Wormtongue
-Rank 51 out of 62
-availability score: 55.86428922915093
------------------------------
-Voracious Fell Beast: -25.134456849432528
-Rush the Room: -20.597645474021373
+Gollum's Bite: -52.74174272560517
+Claim the Precious: -37.56155081358076
+Fire of Orthanc: -10.107209592325995
+Troll of Khazad-dûm: -6.15217156315774
 =============================
 Card Morgul-Knife Wound
-Rank 52 out of 62
-availability score: 55.7649010628723
+Rank 48 out of 62
+availability score: 75.01992048963982
 -----------------------------
-Mordor Muster: -26.861050528592475
-Gothmog, Morgul Lieutenant: -25.86215282064076
-Bitter Downfall: -15.13078635739119
-Rising of the Day: -4.974331139735642
+Mordor Muster: -39.68900526826311
+Gothmog, Morgul Lieutenant: -30.02790245578344
+Bitter Downfall: -26.169147368940585
 =============================
-Card Gimli, Counter of Kills
-Rank 53 out of 62
-availability score: 41.07708805080815
+Card Orcish Medicine
+Rank 49 out of 62
+availability score: 61.99276289379388
 -----------------------------
-Gollum, Patient Plotter: -13.972503855399426
-Rush the Room: -13.10433033244038
-Warbeast of Gorgoroth: -2.9901988184321056
+Gollum's Bite: -46.87341944855834
+Bitter Downfall: -28.99931582344415
+The Torment of Gollum: -25.227562471870606
+=============================
+Card Erkenbrand, Lord of Westfold
+Rank 50 out of 62
+availability score: 50.74630379217941
+-----------------------------
+Warbeast of Gorgoroth: -12.651457680101302
+Fire of Orthanc: -9.9042055274313
+Éomer of the Riddermark: -3.51196448721359
+Ranger's Firebrand: -1.875699735565409
+=============================
+Card Éomer of the Riddermark
+Rank 51 out of 62
+availability score: 48.323713506204314
+-----------------------------
+Rising of the Day: -18.215793266180402
+Gimli's Axe: -11.14882505489995
+Fiery Inscription: -7.8990018479047635
+The Black Breath: -1.7731301436545404
+Erkenbrand, Lord of Westfold: -0.24316221818312211
+=============================
+Card Gollum, Patient Plotter
+Rank 52 out of 62
+availability score: 44.90267390976817
+-----------------------------
+The Torment of Gollum: -22.79715230053261
+March from the Black Gate: -11.263289755371225
+Uruk-hai Berserker: -3.2295494915283767
+Gimli, Counter of Kills: -2.327652710045175
+=============================
+Card Oath of the Grey Host
+Rank 53 out of 62
+availability score: 17.93820084774672
+-----------------------------
+Lash of the Balrog: -11.637125383644925
+Fiery Inscription: -2.4323883404859075
 =============================
 Card Grond, the Gatebreaker
 Rank 54 out of 62
-availability score: 32.46458506431739
+availability score: 17.00003249316645
 -----------------------------
-Bitter Downfall: -21.95066140371766
-Rising of the Day: -17.50742529644321
-Fiery Inscription: -6.197041969896489
-Rush the Room: -4.024544600587959
+Bitter Downfall: -20.881953897074663
+Rising of the Day: -13.979974435418772
 =============================
-Card Mirkwood Bats
+Card Gríma Wormtongue
 Rank 55 out of 62
-availability score: 32.134533198273814
+availability score: 12.369645855170798
 -----------------------------
-Smite the Deathless: -14.420831269867705
-Book of Mazarbul: -12.903214204930052
-Haradrim Spearmaster: -6.572646758068689
+Voracious Fell Beast: -40.26044127566259
 =============================
-Card Uglúk of the White Hand
+Card Gimli, Counter of Kills
 Rank 56 out of 62
-availability score: 15.461270973725746
+availability score: 5.10958673223924
 -----------------------------
-Orcish Medicine: -4.803457425952816
-Cast into the Fire: -2.408051775461776
-=============================
-Card Cirith Ungol Patrol
-Rank 57 out of 62
-availability score: 6.617186844838672
------------------------------
-Nazgûl: -22.637637760683486
-Voracious Fell Beast: -3.694993506671352
-=============================
-Card Troll of Khazad-dûm
-Rank 58 out of 62
-availability score: 6.003181194975711
------------------------------
-Smite the Deathless: -6.241400838070943
-=============================
-Card Oath of the Grey Host
-Rank 59 out of 62
-availability score: 5.3529006680289575
------------------------------
-Fiery Inscription: -11.381222081202381
-=============================
-Card Gorbag of Minas Morgul
-Rank 60 out of 62
-availability score: 0.7150561869991305
------------------------------
-Nazgûl: -2.9528231311398887
+Gollum, Patient Plotter: -2.52951335372209
+Rush the Room: -1.8505842443203542
 =============================
 Card March from the Black Gate
-Rank 61 out of 62
-availability score: 0.43108566077956023
+Rank 57 out of 62
+availability score: 4.245503380897929
 -----------------------------
-Gollum, Patient Plotter: -1.3903342115159623
+Gollum, Patient Plotter: -13.692565382237241
+=============================
+Card Gorbag of Minas Morgul
+Rank 58 out of 62
+availability score: 3.116756921326685
+-----------------------------
+Nazgûl: -12.870641634550282
+=============================
+Card Nasty End
+Rank 59 out of 62
+availability score: 0
+-----------------------------
+=============================
+Card Mauhúr, Uruk-hai Captain
+Rank 60 out of 62
+availability score: 0
+-----------------------------
+=============================
+Card Uglúk of the White Hand
+Rank 61 out of 62
+availability score: 0
+-----------------------------
 =============================

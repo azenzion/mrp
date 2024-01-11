@@ -1131,6 +1131,8 @@ def elasticity_substitution(card1,
                                             num_substitutes,
                                             card1)
 
+    simple_num_substitutes = [x['numCardInPool'][card2] if card2 in x['numCardInPool'] else 0 for x in card1_obj.picks]
+
     # Eliminate values that didn't have enough observations
     num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
 
@@ -1753,7 +1755,7 @@ log_availabilities(availiabilities, regr_params)
 
 regress_alsa(cards)
 
-#pairs = compute_pairwise_pickrates(pairs, drafts)
+pairs = compute_pairwise_pickrates(pairs, drafts)
 
 
 inversion_pairs = find_inversion_pairs(pairs, card_data)
