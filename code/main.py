@@ -1052,6 +1052,9 @@ def elasticity_substitution(card1,
 
     debug = False
 
+    if regr_params['debug']:
+        debug = True
+
     logify = regr_params['logify']
 
     # parse the regression parameters
@@ -1166,15 +1169,10 @@ def elasticity_substitution(card1,
     # Create the pick_number array
     pick_number_list = []
 
-    if pick_number:
-        for pick in card1_obj.picks:
-            # Since there are 3 packs (0, 1, 2), need to append 15 * pack_number
-            # to get the pick number
-            pick_number = pick['pick_number'] + 1
-            pack_number = pick['pack_number']
-            modified_pick_number = 15 * pack_number + pick_number
-            modified_pick_number = np.log(modified_pick_number)
-            pick_number_list.append(modified_pick_number)
+    pick_number_list = [15 * x['pack_number'] + x['pick_number'] + 1 for x in card1_obj.picks]
+
+    if logify:
+        pick_number_list = [np.log(x) for x in pick_number_list]
 
     # Create the matrices for the regression
     endog = np.array(picked)
@@ -1732,12 +1730,19 @@ regr_params = {
     "check_card2_colour": True,
     "pick_number": True,
     "check_card1_in_pool": False,
-    "symmetrical_subs": False,
-    "logify": True
+    "symmetrical_subs": True,
+    "logify": True,
+    "debug": False,
 }
 
 # Do a regression of Rohirrim Lancer on Rally at the Hornburg
 elasticity_substitution("Rohirrim Lancer", "Rally at the Hornburg", regr_params)
+
+# Voracious Fell Beast on Smite the Deathless
+elasticity_substitution("Voracious Fell Beast", "Smite the Deathless", regr_params)
+
+# Smite the Deathless on Voracious Fell Beast
+elasticity_substitution("Smite the Deathless", "Voracious Fell Beast", regr_params)
 
 cards_with_subs = get_substitutes(cards,
                                   regr_params=regr_params)
