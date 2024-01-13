@@ -1057,6 +1057,8 @@ def elasticity_substitution(card1,
 
     logify = regr_params['logify']
 
+    simple = regr_params['simple']
+
     # parse the regression parameters
     check_card1_colour = regr_params['check_card1_colour']
     check_card2_colour = regr_params['check_card2_colour']
@@ -1217,6 +1219,62 @@ def elasticity_substitution(card1,
 
         print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
+
+    # Simple model
+    # Continuous on number of cards in pool
+    if simple:
+        endog = picked
+
+        exog = np.array(simple_num_substitutes)
+        exog = sm.add_constant(exog)
+
+        labels = ["Constant", f"{card2} in pool"]
+
+        if check_card1_in_pool:
+            exog = np.column_stack((exog, card1_in_pool))
+            labels.append(f"{card1} in pool")
+
+        if check_card1_colour:
+            exog = np.column_stack((exog, card1_colour_count))
+            labels.append(f"{card1_colour} in pool")
+
+        if check_card2_colour:
+            exog = np.column_stack((exog, card2_colour_count))
+            labels.append(f"{card2_colour} in pool")
+
+        if pick_number:
+            exog = np.column_stack((exog, pick_number_list))
+            labels.append("Pick number")
+
+        # Label and run the model
+        model = sm.OLS(endog, exog)
+
+        model.exog_names[:] = labels
+
+        results = model.fit()
+
+        elasticity = results.params[1]
+
+        # get the parameter on simple_num_substitutes
+        # if it's negative, they are substitutes
+        # if it's positive, they are complements
+        # if it's 0, they are independent
+        if debug:
+            print(results.summary())
+
+        if elasticity < 0:
+            substitutes = True
+        else:
+            substitutes = False
+
+        if debug:
+            print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
+            if substitutes:
+                print(f"{card1} and {subs_list} are substitutes")
+            else:
+                print(f"{card1} and {subs_list} are not substitutes")
+
+
     return elasticity
 
 
@@ -1300,6 +1358,121 @@ def regress_alsa(cards):
     plt.show()
 
 
+def is_substitute_for(card,
+                      sub,
+                        cards_with_subs):
+    for cardname, elasticity in cards_with_subs[card]:
+        if cardname == sub:
+            return True
+
+    return False
+
+
+# Apply a series of tests to this substitute set 
+# To see how well it matches intuition
+def test_substitutes_set(cards_with_subs,
+                         availabilities,
+                         regr_params):
+
+    success_count = 0
+    fail_count = 0
+
+    filename = "substitutes_test_results"
+    filename += suffix_params(regr_params)
+    filename += ".txt"
+
+    # As we go, print and write to a file
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "w") as f:
+
+        print(type(availabilities))
+
+        if type(availabilities) is not dict:
+            availabilities = availabilities[0]
+        # Rally at the Hornburg has more substitutes than Smite the Deathless
+        # Is the hypothesis true
+        # Check if Rally at the Hornburg has more substitutes than Smite the Deathless
+        if availabilities["Rally at the Hornburg"] > availabilities["Smite the Deathless"]:
+            print("Rally at the Hornburg has more substitutes than Smite the Deathless")
+            f.write("Rally at the Hornburg has more substitutes than Smite the Deathless\n")
+            success_count += 1
+        else:
+            print("Rally at the Hornburg has fewer substitutes than Smite the Deathless")
+            f.write("Rally at the Hornburg has fewer substitutes than Smite the Deathless\n")
+            fail_count += 1
+
+        # Same colour similar
+        # Rally at the Hornburg should be a substitute for Smite the Deathless
+        if is_substitute_for("Smite the Deathless", "Rally at the Hornburg", cards_with_subs):
+            print("Rally at the Hornburg is a substitute for Smite the Deathless")
+            f.write("Rally at the Hornburg is a substitute for Smite the Deathless\n")
+            success_count += 1
+        else:
+            print("Rally at the Hornburg is not a substitute for Smite the Deathless")
+            f.write("Rally at the Hornburg is not a substitute for Smite the Deathless\n")
+            fail_count += 1
+
+        # Cross-Colour different cards should not be substitutes
+        # Voracious Fell Beast should not be a substitute for Smite the Deathless
+        if is_substitute_for("Smite the Deathless", "Voracious Fell Beast", cards_with_subs):
+            print("Voracious Fell Beast is not a substitute for Smite the Deathless")
+            f.write("Voracious Fell Beast is not a substitute for Smite the Deathless\n")
+            success_count += 1
+        else:
+            print("Voracious Fell Beast is a substitute for Smite the Deathless")
+            f.write("Voracious Fell Beast is a substitute for Smite the Deathless\n")
+            fail_count += 1
+
+        # Cross-colour similar cards should be substitutes
+        # Easterling Vanguard should be a substitute for Battle-Scarred Goblin
+        if is_substitute_for("Battle-Scarred Goblin", "Easterling Vanguard", cards_with_subs):
+            print("Easterling Vanguard is a substitute for Battle-Scarred Goblin")
+            f.write("Easterling Vanguard is a substitute for Battle-Scarred Goblin\n")
+            success_count += 1
+        else:
+            print("Easterling Vanguard is not a substitute for Battle-Scarred Goblin")
+            f.write("Easterling Vanguard is not a substitute for Battle-Scarred Goblin\n")
+            fail_count += 1
+
+        # Same-colour removal spells should be substitutes
+        count = 0
+        for card in redRemoval:
+            if is_substitute_for("Smite the Deathless", card, cards_with_subs):
+                count += 1
+        print(f"Found {count} out of {len(redRemoval)} red removal spells as substitutes for Smite the Deathless")
+        f.write(f"Found {count} out of {len(redRemoval)} red removal spells as substitutes for Smite the Deathless\n")
+
+        # Different-colour removal spells should be substitutes
+        count = 0
+        blackRemoval = ["Claim the Precious",
+                        "Bitter Downfall",
+                        "Gollum's Bite",
+                        "Lash of the Balrog",]
+        for card in blackRemoval:
+            if is_substitute_for("Smite the Deathless", card, cards_with_subs):
+                count += 1
+        print(f"Found {count} out of {len(blackRemoval)} black removal spells as substitutes for Smite the Deathless")
+        f.write(f"Found {count} out of {len(blackRemoval)} black removal spells as substitutes for Smite the Deathless\n")
+
+        # Relentless Rohirrim should not be a substitute for Smite the Deathless
+        if is_substitute_for("Smite the Deathless", "Relentless Rohirrim", cards_with_subs):
+            print("Relentless Rohirrim is not a substitute for Smite the Deathless")
+            f.write("Relentless Rohirrim is not a substitute for Smite the Deathless\n")
+            success_count += 1
+        else:
+            print("Relentless Rohirrim is a substitute for Smite the Deathless")
+            f.write("Relentless Rohirrim is a substitute for Smite the Deathless\n")
+            fail_count += 1
+
+        # Print summary
+        print(f"Number of successes: {success_count} / {success_count + fail_count}")
+        print(f"Number of failures: {fail_count} / {success_count + fail_count}")
+        f.write(f"Number of successes: {success_count} / {success_count + fail_count}\n")
+        f.write(f"Number of failures: {fail_count} / {success_count + fail_count}\n")
+
+        # return the number of successes
+        return success_count
+
+
 # Get all the substitutes for a list of cards
 # Takes a list of cards
 # Returns {
@@ -1307,22 +1480,35 @@ def regress_alsa(cards):
 #  card2: ...
 # }
 def get_substitutes(cards,
-                    regr_params) -> dict:
+                    regr_params,
+                    refresh=False) -> dict:
     print("Getting substitutes for a list of cards")
 
     symmetrical_subs = regr_params['symmetrical_subs']
 
-    # Check if there is a local cache
-    if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "substitutes.pickle")):
-        with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutes.pickle"), "rb") as f:
+    filename = "substitutes"
+    filename += suffix_params(regr_params)
+    filename += ".pickle"
+
+    # If refresh, delete any local cache
+    if refresh:
+        if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", filename)):
+            os.remove(os.path.join(os.path.dirname(__file__), "..", "data", filename))
+
+    # If there is a local cache, use it
+    if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", filename)):
+        print("Found local cache of substitutes")
+        with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "rb") as f:
             return pickle.load(f)
 
+    # If there is no local cache, compute the substitutes
     cards_with_subs = {}
 
     cards_with_elasticities = {}
 
     completion_times = []
 
+    print(f"Computing substitutes for regression parameters: {regr_params}")
     # Compute the elasticity of substitution for each pair of cards
     for card1 in cards:
         print("Getting substututes for " + card1)
@@ -1367,11 +1553,12 @@ def get_substitutes(cards,
                 cards_with_subs[card1].append((card2, chosen_elasticity))
 
     # Cache the cards with their substitutes
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "substitutes.pickle"), "wb") as f:
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "wb") as f:
         pickle.dump(cards_with_subs, f)
-        # delete availabilities.pickle
-        # if it exists
-        # Because it is dependent on the substitutes
+
+    # If we recalculated substitutes, need to delete availabilities
+    # as these are dependedent
+    if refresh:
         if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle")):
             os.remove(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle"))
 
@@ -1514,7 +1701,7 @@ def store_availability(card_data,
     return card_data
 
 
-def log_availabilities(availabilities, regr_params):
+def log_availabilities(availabilities, cards_with_subs, regr_params):
     print("Logging availability of substitutes")
 
     # Write to a log file
@@ -1526,11 +1713,17 @@ def log_availabilities(availabilities, regr_params):
     # ========
 
     # Sort the cards by availability
-    sorted_availabilities = sorted(availabilities.items(), key=lambda x: x[1], reverse=True)
+    sorted_availabilities = sorted(availabilities.items(),
+                                   key=lambda x: x[1],
+                                   reverse=True)
+
+    # Create the filename, based on the regression parameters
+    filename = "availabilities"
+
+    filename += suffix_params(regr_params)
 
     # Open the log file
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.log"), "w") as f:
-
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", filename + ".log"), "w") as f:
         # Log the regression parameters
         f.write("Regression parameters\n")
         f.write("======================\n")
@@ -1560,18 +1753,21 @@ def log_availabilities(availabilities, regr_params):
 
 def compute_availability(cards_with_subs,
                          card_data,
+                         regr_params,
                          ):
     print("Computing availability of substitutes")
+
+    filename = "availabilities"
+    filename += suffix_params(regr_params)
+    filename += ".pickle"
 
     # Check if there is a local cache
     # availiabilities.pickle
     # if so return it
-    if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle")):
-        with open(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle"), "rb") as f:
-            availabilities = pickle.load(f)
-            card_data = store_availability(card_data, availabilities)
-            return availabilities, card_data
-
+    if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", filename)):
+        print("Found local cache of availabilities")
+        with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "rb") as f:
+            return pickle.load(f), card_data
     availabilities = {}
 
     for card, substitutes in cards_with_subs.items():
@@ -1592,7 +1788,7 @@ def compute_availability(cards_with_subs,
         availabilities[card] = cardSubstitutesCount
 
     # Cache the availabilities
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "availabilities.pickle"), "wb") as f:
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "wb") as f:
         pickle.dump(availabilities, f)
 
     card_data = store_availability(card_data, availabilities)
@@ -1649,6 +1845,86 @@ def get_cards_in_colours(card_data, colours, rares):
     return cards
 
 
+def suffix_to_regr_params(suffix):
+    regr_params = {
+        "check_card1_colour": False,
+        "check_card2_colour": False,
+        "pick_number": False,
+        "check_card1_in_pool": False,
+        "symmetrical_subs": False,
+        "logify": False,
+        "debug": False,
+        "simple": False,
+    }
+
+    if "colour1" in suffix:
+        regr_params['check_card1_colour'] = True
+    if "colour2" in suffix:
+        regr_params['check_card2_colour'] = True
+    if "same_in_pool" in suffix:
+        regr_params['check_card1_in_pool'] = True
+    if "pick_number" in suffix:
+        regr_params['pick_number'] = True
+    if "log" in suffix:
+        regr_params['logify'] = True
+    if "sym" in suffix:
+        regr_params['symmetrical_subs'] = True
+    if "simple" in suffix:
+        regr_params['simple'] = True
+
+    return regr_params
+
+
+
+
+
+def suffix_params(regr_params):
+    filename = ""
+    if regr_params['check_card1_colour']:
+        filename += "_colour1"
+    if regr_params['check_card2_colour']:
+        filename += "_colour2"
+    if regr_params['check_card1_in_pool']:
+        filename += "_same_in_pool"
+    if regr_params['pick_number']:
+        filename += "_pick_number"
+
+    # Logify
+    if regr_params['logify']:
+        filename += "_log"
+
+    # Symmetrical or asymmetrical substitutes
+    if regr_params['symmetrical_subs']:
+        filename += "_sym"
+
+    # Simple model
+    if regr_params['simple']:
+        filename += "_simple"
+
+    return filename
+
+
+def generate_subs_groupings(cards,
+                            card_data,
+                            regr_params,
+                            refresh):
+    # Get the substitutes for each card
+    cards_with_subs = get_substitutes(cards, regr_params, refresh)
+
+    # Compute the availability of each card
+    availabilities, card_data = compute_availability(cards_with_subs,
+                                                     card_data)
+
+    # Log the availabilities
+    log_availabilities(availabilities, cards_with_subs, regr_params)
+
+    test_substitutes_set(cards_with_subs, availabilities, regr_params)
+
+    # cleanse card_data
+    for card in card_data.values():
+        card.numberSubstitutes = 0
+
+
 def print_inversion_pairs(inversion_pairs):
     print("Printing inversion pairs")
 
@@ -1695,63 +1971,22 @@ print("This many pairs of cards: " + str(len(pairs)))
 
 drafts = colour_pair_filter(drafts, colours)
 
-# Go through the drafts, 
+# Go through the drafts,
 # Appending the information we need for the regression to each card
 parse_pool_info(drafts)
-
-"""
-fell_drafts = []
-# Find drafts where the user had 2 voracious fell beasts
-for draft in drafts:
-    lastPick = draft.picks[-1]
-    finalPool = lastPick.numCardInPool
-
-    if "Voracious Fell Beast" in finalPool:
-        if finalPool["Voracious Fell Beast"] == 2:
-            print("Found draft where drafter had 2 Voracious Fell Beasts")
-            fell_drafts.append(draft)
-
-# For each draft, print the picks in order
-# Print the card picked, and the cards in pool
-
-for draft in fell_drafts:
-    for pick in draft.picks:
-        print(f"Pick: {pick['pick_number']}")
-        print(f"Card picked: {pick['pick']}")
-        print(f"Cards in pool: {pick['numCardInPool']}")
-        print("=====================================")
-
-    exit()
-
-exit()
-"""
 
 # Define the parameters for the elasticity regression
 regr_params = {
     "check_card1_colour": False,
-    "check_card2_colour": True,
-    "pick_number": True,
+    "check_card2_colour": False,
+    "pick_number": False,
     "check_card1_in_pool": False,
     "symmetrical_subs": True,
     "logify": True,
     "debug": False,
+    "simple": True,
 }
 
-# Do a regression of Rohirrim Lancer on Rally at the Hornburg
-elasticity_substitution("Rohirrim Lancer", "Rally at the Hornburg", regr_params)
-
-# Voracious Fell Beast on Smite the Deathless
-elasticity_substitution("Voracious Fell Beast", "Smite the Deathless", regr_params)
-
-# Smite the Deathless on Voracious Fell Beast
-elasticity_substitution("Smite the Deathless", "Voracious Fell Beast", regr_params)
-
-cards_with_subs = get_substitutes(cards,
-                                  regr_params=regr_params)
-
-availiabilities, card_data = compute_availability(cards_with_subs, card_data)
-
-log_availabilities(availiabilities, regr_params)
 
 regress_alsa(cards)
 
