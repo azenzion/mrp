@@ -675,9 +675,6 @@ def process_draft_pool(draft):
 
     draft.picks.sort(key=lambda x: x.pick_number + 15 * x.pack_number)
 
-
-
-
     # initialize values
     num_card_in_draft_pool = {}
     colour_in_draft_pool = {}
@@ -705,51 +702,58 @@ def process_draft_pool(draft):
 
         append_regr_info_to_card(card, pick)
 
-        # Ath this point, print the sum of numCardinPool 
+        """
+        # At this point, print the sum of numCardinPool 
         # and the pick number
         if debug:
             print(f"Sum of numCardInPool: {sum(num_card_in_draft_pool.values())}")
             pick_number = pick.pick_number + 1 + 15 * pick.pack_number
             print(f"Pick number: {pick_number} ")
 
+        openness_to_red = calculate_openness_to_colour("R", pick)
+        openness_to_black = calculate_openness_to_colour("B", pick)
+        # Print total pick number
+        print(f"Pick number: {pick.pick_number}")
+        # print sorted colourInPool
+        print(f"Sorted colourInPool: {sorted(pick.colourInPool.items(), key=lambda x: x[1], reverse=True)}")
+        print(f"Openness to red: {openness_to_red}")
+        print(f"Openness to black: {openness_to_black}")
+        print(f"========================================")
+        time.sleep(2)
+        """
+        
         # Print all the picks 
         # Where there are 4 Easterling Vanguard in pool
         # Relentless Rohirrim is in the pack
         # And Relentless Rohirrim is not picked
         # Print the pick
         # Print the pool
-        
+        """
         if "Easterling Vanguard" in pick.numCardInPool:
             if pick.numCardInPool["Easterling Vanguard"] == 4:
+
                 # Check if Relentless Rohirrim is in the pack
-                rohirrim = False
+                rohirrim_in_pack = False
                 for card in pick.pack_cards:
                     if card == cardNumsHash["Relentless Rohirrim"]:
-                        rohirrim = True
+                        rohirrim_in_pack = True
                         break
-                if not rohirrim:
-                    #print(f"Rohirrim was picked")
-                    # Print openness to red
-                    #openness_to_red = calculate_openness_to_colour("R", pick)
-                    #print(f"Openness to red: {openness_to_red}")
-                    #time.sleep(1)
+                if not rohirrim_in_pack:
                     continue
 
+                # Check if Relentless Rohirrim was picked
                 if pick.pick == cardNumsHash["Relentless Rohirrim"]:
                     continue
-                else:
-                    print(f"Rohirrim not picked")
-                    print(f"Pick was {cardNamesHash[pick.pick]}")
-                    #print(f"Pack number was {pick.pack_number}")
-                    #print(f"Pick number was {pick.pick_number}")
-                    # Print the full pool
-                    #print(f"Pool: {pick.numCardInPool}")
 
-                    # Print openness to red
-                    openness_to_red = calculate_openness_to_colour("R", pick)
-                    print(f"Openness to red: {openness_to_red}")
+                print(f"Found 4 Easterling Vanguard in the pool")
+                print(f"Found Relentless Rohirrim in the pack")
+                print(f"Pick was {cardNamesHash[pick.pick]}")
+                # Print colourInPool sorted
+                print(f"ColourInPool: {sorted(pick.colourInPool.items(), key=lambda x: x[1], reverse=True)}")
+                print(f"Openness to red: {calculate_openness_to_colour('R', pick)}")
+                time.sleep(5)
+                """
 
-                    time.sleep(1)
 
 
         """
@@ -1072,19 +1076,26 @@ def calculate_openness_to_colour(colour1,
         pick_number = pick['pick_number']
         pack_number = pick['pack_number']
     else:
-        try:
-            colour_in_pool = pick.colour_in_pool
-        except AttributeError:
-            colour_in_pool = {}
+        colour_in_pool = pick.colourInPool
         pick_number = pick.pick_number
         pack_number = pick.pack_number
 
+    total_picks = pick_number + 1 + 15 * pack_number
+
+    if total_picks == 1:
+        return 0
+
+    # ignore colourless card
+    if '' in colour_in_pool:
+        del colour_in_pool['']
+
+    # if there is only one colour in the pool
+    # we are open to a second colour
+    if len(colour_in_pool) < 2:
+        return 1
+
     # Calculate openness to colour1
     cards_in_pool = sum(colour_in_pool.values())
-
-    # If no cards_in_pool, fully open to any colour
-    if cards_in_pool == 0:
-        return 1
 
     colourshares = {
         'W': 0,
@@ -1093,44 +1104,92 @@ def calculate_openness_to_colour(colour1,
         'R': 0,
         'G': 0
     }
+    colour_counts = {
+        'W': 0,
+        'U': 0,
+        'B': 0,
+        'R': 0,
+        'G': 0
+    }
 
-    for colour in colourshares.keys():
-        colour_count = 0
-        for key in colour_in_pool.keys():
-            if colour in key:
-                colour_count += colour_in_pool[key]
-        colourshares[colour] = colour_count / cards_in_pool
+    for colour in colour_in_pool.keys():
+        for i in range(len(colour)):
+            colour_counts[colour[i]] += colour_in_pool[colour]
 
-    share_of_colour1 = colourshares[colour1]
+    # Calculate shares
+    for colour in colour_in_pool.keys():
+        for i in range(len(colour)):
+            colourshares[colour[i]] += colour_in_pool[colour] / cards_in_pool
 
-    # eliminate all 0s from colourshares
-    colourshares = {k: v for k, v in colourshares.items() if v != 0}
 
-    # get the top 2 colours by share
-    top2 = sorted(colourshares.items(), key=lambda x: x[1], reverse=True)[:2]
+    sorted_shares = sorted(colourshares.items(), key=lambda x: x[1], reverse=True)
 
-    # Print the top2 colours
-    print(f"Top 2 colours: {top2}")
+    top_colour = sorted_shares[0][0]
+    second_colour = sorted_shares[1][0]
+    third_colour = sorted_shares[2][0]
 
-    # return 1 if colour1 is in the top 2 colours
-    for colour in top2:
-        if colour1 in colour[0]:
-            return 1
+    top_share = sorted_shares[0][1]
+    second_share = sorted_shares[1][1]
+    third_share = sorted_shares[2][1]
 
-    # return 1 if there is only one colour in the pool
-    if len(top2) == 1:
+    top_count = colour_counts[top_colour]
+    second_count = colour_counts[second_colour]
+    third_count = colour_counts[third_colour]
+
+    colour1_share = colourshares[colour1]
+    colour1_count = colour_counts[colour1]
+
+    # If colour1 is top, return 1
+    if colour1_count == top_count:
         return 1
+
+    # If there is no second colour, return 1
+    if second_count == 0:
+        return 1
+
+    # If there is no third colour
+    # return 1 if colour1_count > 0
+    # else return second count
+    if third_count == 0:
+        if colour1_share > 0:
+            return 1
+        else:
+            return 1 / np.log(total_picks + 1)
+
+    # If colour1 is second or third
+    # We want a number that reflects how large it is relative to second/third
+
+    # If colour1 is second
+    if colour1_share == second_share:
+        return colour1_count / (colour1_count + third_count) - 0.5
+
+    # If colour1 is third
+    if colour1_share == third_share:
+        return colour1_count / (colour1_count + third_count) - 0.5
+
+    # Else you are not open to colour1
+    return -1
+
+    
+
 
     # Return 1 minus the percentage of picks that are the second highest colour
     # This is the portion of your pool that you give up
     # to pivot into colour1
-    openness = 1 - top2[1][1]
+    #openness = 1 - top2[1][1]
+
+    # add the share of pool that is colour1
+    #openness += share_of_colour1
 
     # Divide by pick_number to reflect the fact that players are less likely to change colours
     # later in the draft
-    total_picks = pick_number + 1 + 15 * pack_number
 
-    openness /= total_picks
+    #openness /= np.log(total_picks + 1)
+
+    if in_top_2:
+        openness = 1 - share_of_colour1 
+
+    
 
     return openness
 
@@ -1294,7 +1353,8 @@ def elasticity_substitution(card1,
     pick_number_list = [15 * x['pack_number'] + x['pick_number'] + 1 for x in card1_obj.picks]
 
     # Create a variable that represents the number of times you are seeing the card this draft
-    times_seen = [0 if x['pick_number'] < 8 else 1 for x in card1_obj.picks]
+    if times_seen:
+        times_seen = [0 if x['pick_number'] < 8 else 1 for x in card1_obj.picks]
 
     # Create the matrices for the regression
     if not simple:
@@ -1806,6 +1866,7 @@ def get_substitutes(cards,
                 elasticity = elasticity_substitution(card1,
                                                      card2,
                                                      regr_params)
+                
                 cards_with_elasticities[card1, card2] = elasticity
 
         completion_times.append(time.time() - start_time)
@@ -2246,7 +2307,7 @@ cards, pairs = get_pairs(colours, card_data, rares=False)
 
 print("This many pairs of cards: " + str(len(pairs)))
 
-drafts = colour_pair_filter(drafts, colours)
+#drafts = colour_pair_filter(drafts, colours)
 
 # Set the actual number of drafts
 NUM_DRAFTS = len(drafts)
@@ -2267,27 +2328,44 @@ regr_params = {
     "simple": True,
 }
 
+# Calculate the average openness to red on relentless rohirrim.picks
+# in picks where it was taken and picks where it wasn't
+# This is to see if the model is working
 
-bools = [False, True]
+picked = []
+not_picked = []
+
+relentless_rohirrim = name_to_card("Relentless Rohirrim", card_data)
+for pick in relentless_rohirrim.picks:
+    openness_to_red = calculate_openness_to_colour("R", pick)
+    if pick['wasPicked']:
+        picked.append(openness_to_red)
+    else:
+        not_picked.append(openness_to_red)
+
+print(f"Average openness to red on picks where Relentless Rohirrim was picked: {np.mean(picked)}")
+print(f"Average openness to red on picks where Relentless Rohirrim was not picked: {np.mean(not_picked)}")
+exit()
+
 # Run on Easterling Vanguard and Battle-Scarred Goblin
 # Simple and not Simple
 
 # Baseline Model
 regr_params['simple'] = True
 regr_params['logify'] = False
-regr_params['times_seen'] = True
+regr_params['times_seen'] = False
 regr_params['check_card1_colour'] = True
 regr_params['pick_number'] = False
 regr_params['debug'] = True
-
-#for i in range(20):
-#    POOL_THRESHOLD = 0.05 * i
 
 # Do the relentless Rohirrim Tests
 elasticity_substitution("Relentless Rohirrim", "Easterling Vanguard", regr_params)
 
 
 exit()
+
+
+bools = [False, True]
 
 # Run the model on combinations of parameters
 good_runs = []
