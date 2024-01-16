@@ -41,6 +41,7 @@ OBSERVATIONS_THRESHOLD = 40
 ELASTICITY_THRESHOLD = 0.0
 
 COLOURS_THRESHOLD = 5
+POOL_THRESHOLD = 0.5
 
 OPTIMIZE_STORAGE = True
 
@@ -649,10 +650,7 @@ def append_regr_info_to_card(card, pick):
     if card.colour in pick.colourInPool:
         pick_for_regr["sameColourInPool"] = pick.colourInPool[card.colour]
 
-    if "R" in pick.colourInPool:
-        pick_for_regr["RinPool"] = pick.colourInPool["R"]
-    if "B" in pick.colourInPool:
-        pick_for_regr["BinPool"] = pick.colourInPool["B"]
+    pick_for_regr['colourInPool'] = pick.colourInPool
 
     pick_for_regr["pick_number"] = pick.pick_number
 
@@ -670,6 +668,15 @@ def dict_increment(dictionary, key):
 
 
 def process_draft_pool(draft):
+
+    # Sort the picks by modified pick number
+    # This is the pick number + 15 * pack number + 1
+    # This is the order in which the cards were seen
+
+    draft.picks.sort(key=lambda x: x.pick_number + 15 * x.pack_number)
+
+
+
 
     # initialize values
     num_card_in_draft_pool = {}
@@ -697,6 +704,93 @@ def process_draft_pool(draft):
             card = card_data[pool_card]
 
         append_regr_info_to_card(card, pick)
+
+        # Ath this point, print the sum of numCardinPool 
+        # and the pick number
+        if debug:
+            print(f"Sum of numCardInPool: {sum(num_card_in_draft_pool.values())}")
+            pick_number = pick.pick_number + 1 + 15 * pick.pack_number
+            print(f"Pick number: {pick_number} ")
+
+        # Print all the picks 
+        # Where there are 4 Easterling Vanguard in pool
+        # Relentless Rohirrim is in the pack
+        # And Relentless Rohirrim is not picked
+        # Print the pick
+        # Print the pool
+        
+        if "Easterling Vanguard" in pick.numCardInPool:
+            if pick.numCardInPool["Easterling Vanguard"] == 4:
+                # Check if Relentless Rohirrim is in the pack
+                rohirrim = False
+                for card in pick.pack_cards:
+                    if card == cardNumsHash["Relentless Rohirrim"]:
+                        rohirrim = True
+                        break
+                if not rohirrim:
+                    #print(f"Rohirrim was picked")
+                    # Print openness to red
+                    #openness_to_red = calculate_openness_to_colour("R", pick)
+                    #print(f"Openness to red: {openness_to_red}")
+                    #time.sleep(1)
+                    continue
+
+                if pick.pick == cardNumsHash["Relentless Rohirrim"]:
+                    continue
+                else:
+                    print(f"Rohirrim not picked")
+                    print(f"Pick was {cardNamesHash[pick.pick]}")
+                    #print(f"Pack number was {pick.pack_number}")
+                    #print(f"Pick number was {pick.pick_number}")
+                    # Print the full pool
+                    #print(f"Pool: {pick.numCardInPool}")
+
+                    # Print openness to red
+                    openness_to_red = calculate_openness_to_colour("R", pick)
+                    print(f"Openness to red: {openness_to_red}")
+
+                    time.sleep(1)
+
+
+        """
+        # Print any pick where the pack number is 2
+        # There is a Smite the Deathless in the pool
+        # and Voracious Fell Beast is offered
+        # Print what the pick was
+        if pick.pack_number == 2:
+            if "Smite the Deathless" in pick.numCardInPool:
+                # Check if Voracious Fell Beast was in the pack
+                vor = False
+                for card in pick.pack_cards:
+                    if card == cardNumsHash["Voracious Fell Beast"]:
+                        print(f"Found Voracious Fell Beast in the pack")
+                        vor = True
+                        break
+                if not vor:
+                    continue
+
+                if pick.pick == cardNumsHash["Voracious Fell Beast"]:
+                    print("Voracious Fell Beast was picked")
+                    continue
+                else:
+                    print("Voracious Fell Beast was not picked")
+                    print(f"Found Smite the Deathless in the pool")
+                    print(f"Pick was {cardNamesHash[pick.pick]}")
+                    print(f"Pack number was {pick.pack_number}")
+                    print(f"Pick number was {pick.pick_number}")
+                    # Print the full pool
+                    print(f"Pool: {pick.numCardInPool}")
+
+                    # Print the openness to black
+                    openness_to_black = calculate_openness_to_colour("B", pick)
+                    print(f"Openness to black: {openness_to_black}")
+
+                    time.sleep(10)
+
+            """
+
+
+
 
 
 # This sets us up for the regression
@@ -810,63 +904,9 @@ def check_if_substitutes(results,
         if debug:
             print(f"Number of observations with {num_card2} substitutes: {num_obs_card2}")
 
-        coeff += results.params[i] * num_obs_card2
+        coeff += results.params[i] * i
 
     return coeff < 0, coeff
-
-    # Are we or are we not checking the 0th coefficient
-    if eliminate_zero_coef:
-        first_coef = num_controls
-    else:
-        first_coef = num_controls - 1
-
-    elasticity = 0.0
-
-    # Total number of observations
-    total_obs = 0
-
-    # Get the coefficent of each number of substitutes in the pool
-    # Calculate the difference between having i substitutes and i + 1 substitutes
-    STARTING_INDEX = 0
-
-    num_subs = STARTING_INDEX
-
-    for i in range(first_coef, len(results.params) - 1):
-
-        # Get the coefficient for having i + 1 substitutes
-        coefficient_greater = results.params[i + 1]
-        # Get the coefficient for having i substitutes
-        coefficient_less = results.params[i]
-
-        # If we're weighting by number of observations
-        # Get the number of observations for each number of substitutes
-        num_obs_greater = num_obs[num_subs + 1]
-
-        if weight_by_num_obs:
-            elasticity += (coefficient_greater - coefficient_less) * num_obs_greater * (i+1)
-        else:
-            elasticity += (coefficient_greater - coefficient_less)
-
-        total_obs += num_obs_greater
-
-        num_subs += 1
-
-    if total_obs == 0:
-        if debug:
-            print('Not enough observations to calculate elasticity of substitution')
-        return False, 999
-
-    # divide by totalNobs
-    if weight_by_num_obs:
-        elasticity /= total_obs
-
-    if debug:
-        print(f"Elasticity of substitution: {elasticity}")
-
-    if elasticity < 0:
-        return True, elasticity
-    else:
-        return False, elasticity
 
 
 # for picks where poth cards were present
@@ -1024,6 +1064,76 @@ def eliminate_low_observations(num_substitutes):
     return num_substitutes, num_observations
 
 
+def calculate_openness_to_colour(colour1,
+                                 pick):
+
+    if type(pick) is dict:
+        colour_in_pool = pick['colourInPool']
+        pick_number = pick['pick_number']
+        pack_number = pick['pack_number']
+    else:
+        try:
+            colour_in_pool = pick.colour_in_pool
+        except AttributeError:
+            colour_in_pool = {}
+        pick_number = pick.pick_number
+        pack_number = pick.pack_number
+
+    # Calculate openness to colour1
+    cards_in_pool = sum(colour_in_pool.values())
+
+    # If no cards_in_pool, fully open to any colour
+    if cards_in_pool == 0:
+        return 1
+
+    colourshares = {
+        'W': 0,
+        'U': 0,
+        'B': 0,
+        'R': 0,
+        'G': 0
+    }
+
+    for colour in colourshares.keys():
+        colour_count = 0
+        for key in colour_in_pool.keys():
+            if colour in key:
+                colour_count += colour_in_pool[key]
+        colourshares[colour] = colour_count / cards_in_pool
+
+    share_of_colour1 = colourshares[colour1]
+
+    # eliminate all 0s from colourshares
+    colourshares = {k: v for k, v in colourshares.items() if v != 0}
+
+    # get the top 2 colours by share
+    top2 = sorted(colourshares.items(), key=lambda x: x[1], reverse=True)[:2]
+
+    # Print the top2 colours
+    print(f"Top 2 colours: {top2}")
+
+    # return 1 if colour1 is in the top 2 colours
+    for colour in top2:
+        if colour1 in colour[0]:
+            return 1
+
+    # return 1 if there is only one colour in the pool
+    if len(top2) == 1:
+        return 1
+
+    # Return 1 minus the percentage of picks that are the second highest colour
+    # This is the portion of your pool that you give up
+    # to pivot into colour1
+    openness = 1 - top2[1][1]
+
+    # Divide by pick_number to reflect the fact that players are less likely to change colours
+    # later in the draft
+    total_picks = pick_number + 1 + 15 * pack_number
+
+    openness /= total_picks
+
+    return openness
+
 # Count the number of cards in pick.colourInPool
 # that are the same colour as card
 # excluding cards in excludes
@@ -1031,11 +1141,11 @@ def get_colour_in_pool(pick,
                         card_colour,
                         excludes):
     if card_colour == "R":
-        card_colour_in_pool = pick['RinPool']
+        card_colour_in_pool = pick['colourInPool']['R']
     elif card_colour == "B":
-        card_colour_in_pool = pick['BinPool']
+        card_colour_in_pool = pick['colourInPool']['B']
     elif card_colour == "BR":
-        card_colour_in_pool = pick['RinPool'] + pick['BinPool']
+        card_colour_in_pool = pick['colourInPool']['R'] + pick['colourInPool']['B']
     else:
         for exclude in excludes:
             if exclude in pick['numCardInPool']:
@@ -1059,11 +1169,18 @@ def elasticity_substitution(card1,
 
     simple = regr_params['simple']
 
+    times_seen = regr_params['times_seen']
+
     # parse the regression parameters
     check_card1_colour = regr_params['check_card1_colour']
     check_card2_colour = regr_params['check_card2_colour']
     check_card1_in_pool = regr_params['check_card1_in_pool']
     pick_number = regr_params['pick_number']
+
+    if 'pool_threshold' in regr_params:
+        pool_threshold = regr_params['pool_threshold']
+    else:
+        pool_threshold = POOL_THRESHOLD
 
     # If card1 is passed in the list of substitutes, remove it
     # This is because we *always* use number of card1 already in pool
@@ -1109,6 +1226,11 @@ def elasticity_substitution(card1,
     # for this pick
     num_substitutes = {}
 
+    # if card1 and card2 are the same colour, don't check card1 colour or card2 colour
+    if card1_colour == card2_colour:
+        check_card1_colour = False
+        check_card2_colour = False
+
     for i in range(1, NUM_MULTIPLES + 1):
         num_substitutes[i] = []
 
@@ -1116,32 +1238,28 @@ def elasticity_substitution(card1,
     r_in_pool = []
 
     if check_card1_colour or check_card2_colour:
-        b_in_pool = [x['BinPool'] for x in card1_obj.picks]
-        r_in_pool = [x['RinPool'] for x in card1_obj.picks]
+        b_in_pool = [x['colourInPool']['B'] if 'B' in x['colourInPool'] else 0 for x in card1_obj.picks]
+        r_in_pool = [x['colourInPool']['R'] if 'R' in x['colourInPool'] else 0 for x in card1_obj.picks]
 
     picked = [x['wasPicked'] for x in card1_obj.picks]
 
     if check_card1_in_pool:
         card1_in_pool = [x['sameCardInPool'] for x in card1_obj.picks]
 
-    #for i in range(1, NUM_MULTIPLES + 1):
-    #    num_substitutes[i] = [0 if (card2 not in pick['numCardInPool'] or pick['numCardInPool'] == 0) else 1 for pick in card1_obj.picks]
+    if not simple:
+        for pick in card1_obj.picks:
+            num_substitutes = count_substitutes(pick,
+                                                subs_list,
+                                                num_substitutes,
+                                                card1)
 
-    for pick in card1_obj.picks:
-        num_substitutes = count_substitutes(pick,
-                                            subs_list,
-                                            num_substitutes,
-                                            card1)
+        # Eliminate values that didn't have enough observations
+        num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
 
     simple_num_substitutes = [x['numCardInPool'][card2] if card2 in x['numCardInPool'] else 0 for x in card1_obj.picks]
 
-    # Eliminate values that didn't have enough observations
-    num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
-
-    if debug:
-        for i in range(1, len(num_substitutes.keys())):
-            print(f"Number of times {card1} was on offer with {i} {card2} in pool")
-            print(sum(num_substitutes[i]))
+    if logify:
+        simple_num_substitutes = [np.log(x + 1) for x in simple_num_substitutes]
 
     if check_card1_colour:
         if card1_colour == "R":
@@ -1150,6 +1268,16 @@ def elasticity_substitution(card1,
             card1_colour_count = b_in_pool
         elif card1_colour == "BR":
             card1_colour_count = [x + y for x, y in zip(r_in_pool, b_in_pool)]
+
+    # replace card1_colour_count with openness to colour1
+    # a player is 1 if they are not committed to 2 colours
+    # and the portion of the pool that is colour1 if they are
+    card1_colour_count = [calculate_openness_to_colour(card1_colour, pick) for pick in card1_obj.picks]
+
+    # Print the first 50 values of card1_colour_count
+    if debug:
+        print(f"First 50 values of {card1} colour count:")
+        print(card1_colour_count[:50])
 
     # Do the same for card2
     if check_card2_colour:
@@ -1160,75 +1288,84 @@ def elasticity_substitution(card1,
         elif card2_colour == "BR":
             card2_colour_count = [x + y for x, y in zip(r_in_pool, b_in_pool)]
 
-    if logify:
-        # Turn each element of card1_colour_count and card2_colour_count into log
-        # into its log
-        if check_card1_colour:
-            for i in range(len(card1_colour_count)):
-                card1_colour_count[i] = np.log(card1_colour_count[i] + 1)
-        if check_card2_colour:
-            for i in range(len(card2_colour_count)):
-                card2_colour_count[i] = np.log(card2_colour_count[i] + 1)
-
     # Create the pick_number array
     pick_number_list = []
 
     pick_number_list = [15 * x['pack_number'] + x['pick_number'] + 1 for x in card1_obj.picks]
 
-    if logify:
-        pick_number_list = [np.log(x) for x in pick_number_list]
+    # Create a variable that represents the number of times you are seeing the card this draft
+    times_seen = [0 if x['pick_number'] < 8 else 1 for x in card1_obj.picks]
 
     # Create the matrices for the regression
-    endog = np.array(picked)
+    if not simple:
 
-    exog, labels = create_exog(picked,
-                               num_substitutes,
-                               check_card1_in_pool,
-                               card1_in_pool,
-                               check_card1_colour,
-                               card1_colour_count,
-                               check_card2_colour,
-                               card2_colour_count,
-                               pick_number,
-                               pick_number_list,
-                               subs_list,
-                               card1_colour,
-                               card2_colour,
-                               card1,
-                               logify)
+        if debug:
+            for i in range(1, len(num_substitutes.keys())):
+                print(f"Number of times {card1} was on offer with {i} {card2} in pool: {sum(num_substitutes[i])}")
 
-    # Create the model
-    model = sm.OLS(endog, exog)
+        endog = np.array(picked)
 
-    model.exog_names[:] = labels
+        exog, labels = create_exog(picked,
+                                num_substitutes,
+                                check_card1_in_pool,
+                                card1_in_pool,
+                                check_card1_colour,
+                                card1_colour_count,
+                                check_card2_colour,
+                                card2_colour_count,
+                                pick_number,
+                                pick_number_list,
+                                subs_list,
+                                card1_colour,
+                                card2_colour,
+                                card1,
+                                logify)
 
-    results = model.fit()
+        if times_seen:
+            exog = np.column_stack((exog, times_seen))
+            labels.append("Times seen")
 
-    substitutes, elasticity = check_if_substitutes(results,
-                                                   num_observations,
-                                                   weight_by_num_obs=True,
-                                                   eliminate_zero_coef=True,
-                                                   labels=labels)
+        # Create the model
+        model = sm.OLS(endog, exog)
 
-    if debug:
-        print(results.summary())
-        if substitutes:
-            print(f"{card1} and {subs_list} are substitutes")
-        else:
-            print(f"{card1} and {subs_list} are not substitutes")
+        model.exog_names[:] = labels
 
-        print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
+        results = model.fit()
 
+        substitutes, elasticity = check_if_substitutes(results,
+                                                    num_observations,
+                                                    weight_by_num_obs=True,
+                                                    eliminate_zero_coef=True,
+                                                    labels=labels)
+
+        if debug:
+            print(results.summary())
+            if substitutes:
+                print(f"{card1} and {subs_list} are substitutes")
+            else:
+                print(f"{card1} and {subs_list} are not substitutes")
+
+            print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
     # Simple model
     # Continuous on number of cards in pool
     if simple:
+
         endog = picked
 
-        exog = np.array(simple_num_substitutes)
-        exog = sm.add_constant(exog)
+        # Initialize exog to a column of ones
+        # this is the constant term
+        exog = np.ones((len(simple_num_substitutes), 1))
+        labels = [f"{card1} baseline"]
 
-        labels = ["Constant", f"{card2} in pool"]
+        # Add the number of substitutes in the pool
+        #exog = np.column_stack((exog, simple_num_substitutes))
+        #labels.append(f"{card2} in pool")
+        #if logify:
+        #    labels[-1] += " (log)"
+
+        # Create the model
+        model = sm.OLS(endog, exog)
 
         if check_card1_in_pool:
             exog = np.column_stack((exog, card1_in_pool))
@@ -1236,7 +1373,7 @@ def elasticity_substitution(card1,
 
         if check_card1_colour:
             exog = np.column_stack((exog, card1_colour_count))
-            labels.append(f"{card1_colour} in pool")
+            labels.append(f"Opennness to {card1_colour}")
 
         if check_card2_colour:
             exog = np.column_stack((exog, card2_colour_count))
@@ -1245,6 +1382,18 @@ def elasticity_substitution(card1,
         if pick_number:
             exog = np.column_stack((exog, pick_number_list))
             labels.append("Pick number")
+
+        if times_seen:
+            exog = np.column_stack((exog, times_seen))
+            labels.append("Times seen")
+
+        # print number of parameters
+        if debug:
+            print(labels)
+
+        # Print width of exog
+        if debug:
+            print(f"Width of exog: {len(exog[0])}")
 
         # Label and run the model
         model = sm.OLS(endog, exog)
@@ -1269,6 +1418,7 @@ def elasticity_substitution(card1,
 
         if debug:
             print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
+
             if substitutes:
                 print(f"{card1} and {subs_list} are substitutes")
             else:
@@ -1281,7 +1431,7 @@ def elasticity_substitution(card1,
 # Regress all cards ALSA on the number of subsitutes seen in the sample
 # and on their GIH winrate
 # Takes a list of cards
-def regress_alsa(cards):
+def regress_alsa(cards, availabilities):
     print("Regressing ALSA on number of substitutes and GIH winrate")
 
     # Make a data frame for the regression
@@ -1299,7 +1449,9 @@ def regress_alsa(cards):
     for card in cards:
         card_obj = name_to_card(card, card_data)
         try:
-            number_substitutes = card_obj.numberSubstitutes
+            availability_score = availabilities[card]
+            #number_substitutes = np.log(availability_score + 1)
+            number_substitutes = availability_score
         except AttributeError as e:
             print(f"Card {card} does not have a number of substitutes")
             print(e)
@@ -1315,9 +1467,37 @@ def regress_alsa(cards):
     # Sort on number of substitutes
     regression_data.sort(key=lambda x: x[1])
 
-    # Print all
-    for row in regression_data:
-        print(f"{row[0]}: number_substitutes: {row[1]}, gih_winrate: {row[2]}, alsa: {row[3]}")
+    # Create the simple regression frame
+    # no number of substitutes
+    simple_regression_data = []
+    for card in cards:
+        card_obj = name_to_card(card, card_data)
+        gih_winrate = card_obj.gameInHandWinrate
+        alsa = card_obj.alsa
+
+        simple_regression_data.append([card,
+                                gih_winrate,
+                                alsa])
+        
+    # Create the simple data frame
+    simple_df = pd.DataFrame(simple_regression_data, columns=["card_name",
+                                                "gih_winrate",
+                                                "alsa"])
+    
+    # Run the simple regression
+    # The model is:
+    # alsa = b0 + b1 * gih_winrate
+
+    # Create the model
+    simple_model = sm.OLS.from_formula("alsa ~ gih_winrate",
+                                data=simple_df)
+    
+    # Fit the model
+    simple_results = simple_model.fit()
+
+    # Print the results
+    print(simple_results.summary())
+
 
     # Create the data frame
     df = pd.DataFrame(regression_data, columns=["card_name",
@@ -1361,6 +1541,7 @@ def regress_alsa(cards):
 def is_substitute_for(card,
                       sub,
                         cards_with_subs):
+
     for cardname, elasticity in cards_with_subs[card]:
         if cardname == sub:
             return True
@@ -1381,6 +1562,8 @@ def test_substitutes_set(cards_with_subs,
     filename += suffix_params(regr_params)
     filename += ".txt"
 
+    print(f"Writing results to {filename}")
+
     # As we go, print and write to a file
     with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "w") as f:
 
@@ -1392,53 +1575,136 @@ def test_substitutes_set(cards_with_subs,
         # Is the hypothesis true
         # Check if Rally at the Hornburg has more substitutes than Smite the Deathless
         if availabilities["Rally at the Hornburg"] > availabilities["Smite the Deathless"]:
-            print("Rally at the Hornburg has more substitutes than Smite the Deathless")
-            f.write("Rally at the Hornburg has more substitutes than Smite the Deathless\n")
+            f.write("success: Rally at the Hornburg has more substitutes than Smite the Deathless\n")
             success_count += 1
         else:
-            print("Rally at the Hornburg has fewer substitutes than Smite the Deathless")
-            f.write("Rally at the Hornburg has fewer substitutes than Smite the Deathless\n")
+            f.write("fail: Rally at the Hornburg has fewer substitutes than Smite the Deathless\n")
             fail_count += 1
 
         # Same colour similar
-        # Rally at the Hornburg should be a substitute for Smite the Deathless
-        if is_substitute_for("Smite the Deathless", "Rally at the Hornburg", cards_with_subs):
-            print("Rally at the Hornburg is a substitute for Smite the Deathless")
-            f.write("Rally at the Hornburg is a substitute for Smite the Deathless\n")
+        # Battle-Scarred Goblin should be a substitute for Rally at the Hornburg
+        f.write("Same-Colour Similar")
+        f.write("=====================================")
+        if is_substitute_for("Rally at the Hornburg", "Battle-Scarred Goblin", cards_with_subs):
+            f.write("success: Battle-Scarred Goblin is a substitute for Rally at the Hornburg\n")
             success_count += 1
         else:
-            print("Rally at the Hornburg is not a substitute for Smite the Deathless")
-            f.write("Rally at the Hornburg is not a substitute for Smite the Deathless\n")
+            f.write("fail: Battle-Scarred Goblin is not a substitute for Rally at the Hornburg\n")
             fail_count += 1
+
+        # Rohirrim Lancer and Rally at the Hornburg should be substitutes
+        if is_substitute_for("Rally at the Hornburg", "Rohirrim Lancer", cards_with_subs):
+            f.write("success: Rohirrim Lancer is a substitute for Rally at the Hornburg\n")
+            success_count += 1
+        else:
+            f.write("fail: Rohirrim Lancer is not a substitute for Rally at the Hornburg\n")
+            fail_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Olog-hai Crusher", cards_with_subs):
+            print("Olog-hai Crusher is a substitute for Relentless Rohirrim")
+            f.write("success: Olog-hai Crusher is a substitute for Relentless Rohirrim\n")
+            success_count += 1
+        else:
+            print("Olog-hai Crusher is not a substitute for Relentless Rohirrim")
+            f.write("fail: Olog-hai Crusher is not a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Warbeast of Gorgoroth", cards_with_subs):
+            print("Warbeast of Gorgoroth is a substitute for Relentless Rohirrim")
+            f.write("success: Warbeast of Gorgoroth is a substitute for Relentless Rohirrim\n")
+            success_count += 1
+        else:
+            print("Warbeast of Gorgoroth is not a substitute for Relentless Rohirrim")
+            f.write("fail: Warbeast of Gorgoroth is not a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+
+        f.write("=====================================")
+        f.write("Same Colour Different")
+
+        # Same Colour different cards should not be substitutes
+        # Smite the Deathless and Warbeast of Gargaroth should not be substitutes
+        if is_substitute_for("Smite the Deathless", "Warbeast of Gorgoroth", cards_with_subs):
+            f.write("fail: Warbeast of Gorgoroth is a substitute for Smite the Deathless\n")
+            fail_count += 1
+        else:
+            f.write("success: Warbeast of Gorgoroth is not a substitute for Smite the Deathless\n")
+            success_count += 1
+
+        # cross-colour different cards should not be substitutes
+        f.write("=====================================")
+        f.write("Cross-Colour Different")
 
         # Cross-Colour different cards should not be substitutes
         # Voracious Fell Beast should not be a substitute for Smite the Deathless
         if is_substitute_for("Smite the Deathless", "Voracious Fell Beast", cards_with_subs):
-            print("Voracious Fell Beast is not a substitute for Smite the Deathless")
-            f.write("Voracious Fell Beast is not a substitute for Smite the Deathless\n")
-            success_count += 1
-        else:
-            print("Voracious Fell Beast is a substitute for Smite the Deathless")
-            f.write("Voracious Fell Beast is a substitute for Smite the Deathless\n")
+            f.write("fail: Voracious Fell Beast is a substitute for Smite the Deathless\n")
             fail_count += 1
+        else:
+            f.write("success: Voracious Fell Beast is not a substitute for Smite the Deathless\n")
+            success_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Easterling Vanguard", cards_with_subs):
+            print("Easterling Vanguard is a substitute for Relentless Rohirrim")
+            f.write("fail: Easterling Vanguard is a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+        else:
+            print("Easterling Vanguard is not a substitute for Relentless Rohirrim")
+            f.write("success: Easterling Vanguard is not a substitute for Relentless Rohirrim\n")
+            success_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Mordor Muster", cards_with_subs):
+            print("Mordor Muster is a substitute for Relentless Rohirrim")
+            f.write("fail: Mordor Muster is a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+        else:
+            print("Mordor Muster is not a substitute for Relentless Rohirrim")
+            f.write("success: Mordor Muster is not a substitute for Relentless Rohirrim\n")
+            success_count += 1
 
         # Cross-colour similar cards should be substitutes
-        # Easterling Vanguard should be a substitute for Battle-Scarred Goblin
+        f.write("Cross-Colour Similar")
+        f.write("=====================================")
         if is_substitute_for("Battle-Scarred Goblin", "Easterling Vanguard", cards_with_subs):
-            print("Easterling Vanguard is a substitute for Battle-Scarred Goblin")
-            f.write("Easterling Vanguard is a substitute for Battle-Scarred Goblin\n")
+            f.write("success: Easterling Vanguard is a substitute for Battle-Scarred Goblin\n")
             success_count += 1
         else:
-            print("Easterling Vanguard is not a substitute for Battle-Scarred Goblin")
-            f.write("Easterling Vanguard is not a substitute for Battle-Scarred Goblin\n")
+            f.write("fail: Easterling Vanguard is not a substitute for Battle-Scarred Goblin\n")
             fail_count += 1
 
+        # Book of Mazarbul and Dunland Crebain should be substitutes
+        if is_substitute_for("Book of Mazarbul", "Dunland Crebain", cards_with_subs):
+            f.write("success: Dunland Crebain is a substitute for Book of Mazarbul\n")
+            success_count += 1
+        else:
+            f.write("fail: Dunland Crebain is not a substitute for Book of Mazarbul\n")
+            fail_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Grond, the Gatebreaker", cards_with_subs):
+            print("Grond, the Gatebreaker is a substitute for Relentless Rohirrim")
+            f.write("success: Grond, the Gatebreaker is a substitute for Relentless Rohirrim\n")
+            success_count += 1
+        else:
+            print("Grond, the Gatebreaker is not a substitute for Relentless Rohirrim")
+            f.write("fail: Grond, the Gatebreaker is not a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Snarling Warg", cards_with_subs):
+            print("Snarling Warg is a substitute for Relentless Rohirrim")
+            f.write("success: Snarling Warg is a substitute for Relentless Rohirrim\n")
+            success_count += 1
+        else:
+            print("Snarling Warg is not a substitute for Relentless Rohirrim")
+            f.write("fail: Snarling Warg is not a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+
+        f.write("=====================================")
+        f.write("Same-Colour Removal Spells")
         # Same-colour removal spells should be substitutes
         count = 0
         for card in redRemoval:
             if is_substitute_for("Smite the Deathless", card, cards_with_subs):
                 count += 1
-        print(f"Found {count} out of {len(redRemoval)} red removal spells as substitutes for Smite the Deathless")
+
         f.write(f"Found {count} out of {len(redRemoval)} red removal spells as substitutes for Smite the Deathless\n")
 
         # Different-colour removal spells should be substitutes
@@ -1450,18 +1716,35 @@ def test_substitutes_set(cards_with_subs,
         for card in blackRemoval:
             if is_substitute_for("Smite the Deathless", card, cards_with_subs):
                 count += 1
-        print(f"Found {count} out of {len(blackRemoval)} black removal spells as substitutes for Smite the Deathless")
         f.write(f"Found {count} out of {len(blackRemoval)} black removal spells as substitutes for Smite the Deathless\n")
 
-        # Relentless Rohirrim should not be a substitute for Smite the Deathless
-        if is_substitute_for("Smite the Deathless", "Relentless Rohirrim", cards_with_subs):
-            print("Relentless Rohirrim is not a substitute for Smite the Deathless")
-            f.write("Relentless Rohirrim is not a substitute for Smite the Deathless\n")
+        f.write("=====================================")
+        f.write("Cross-Colour Removal Spells")
+
+        # The black removal spells should be substitutes for Smite the Deathless
+        count = 0
+        for card in blackRemoval:
+            if is_substitute_for("Smite the Deathless", card, cards_with_subs):
+                count += 1
+        f.write(f"Found {count} out of {len(blackRemoval)} black removal spells as substitutes for Smite the Deathless\n")
+
+        if is_substitute_for("Relentless Rohirrim", "Smite the Deathless", cards_with_subs):
+            print("Smite the Deathless is a substitute for Relentless Rohirrim")
+            f.write("success: Smite the Deathless is a substitute for Relentless Rohirrim\n")
             success_count += 1
         else:
-            print("Relentless Rohirrim is a substitute for Smite the Deathless")
-            f.write("Relentless Rohirrim is a substitute for Smite the Deathless\n")
+            print("Smite the Deathless is not a substitute for Relentless Rohirrim")
+            f.write("fail: Smite the Deathless is not a substitute for Relentless Rohirrim\n")
             fail_count += 1
+
+        if is_substitute_for("Relentless Rohirrim", "Battle-Scarred Goblin", cards_with_subs):
+            print("Battle-Scarred Goblin is a substitute for Relentless Rohirrim")
+            f.write("fail: Battle-Scarred Goblin is a substitute for Relentless Rohirrim\n")
+            fail_count += 1
+        else:
+            print("Battle-Scarred Goblin is not a substitute for Relentless Rohirrim")
+            f.write("success: Battle-Scarred Goblin is not a substitute for Relentless Rohirrim\n")
+            success_count += 1
 
         # Print summary
         print(f"Number of successes: {success_count} / {success_count + fail_count}")
@@ -1691,15 +1974,6 @@ def colour_pair_filter(drafts, colours):
     return drafts
 
 
-def store_availability(card_data,
-                       availabilities):
-
-    for availability in availabilities.keys():
-        card_name = availability
-        card_data[card_name].numberSubstitutes = availabilities[availability]
-
-    return card_data
-
 
 def log_availabilities(availabilities, cards_with_subs, regr_params):
     print("Logging availability of substitutes")
@@ -1790,8 +2064,6 @@ def compute_availability(cards_with_subs,
     # Cache the availabilities
     with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "wb") as f:
         pickle.dump(availabilities, f)
-
-    card_data = store_availability(card_data, availabilities)
 
     return availabilities, card_data
 
@@ -1901,28 +2173,33 @@ def suffix_params(regr_params):
     if regr_params['simple']:
         filename += "_simple"
 
+    if regr_params['times_seen']:
+        filename += "_times_seen"
+
     return filename
+
 
 
 def generate_subs_groupings(cards,
                             card_data,
                             regr_params,
                             refresh):
+
+    # Print the suffix
+    print(suffix_params(regr_params))
+
     # Get the substitutes for each card
     cards_with_subs = get_substitutes(cards, regr_params, refresh)
 
     # Compute the availability of each card
     availabilities, card_data = compute_availability(cards_with_subs,
-                                                     card_data)
+                                                     card_data,
+                                                     regr_params)
 
     # Log the availabilities
     log_availabilities(availabilities, cards_with_subs, regr_params)
 
-    test_substitutes_set(cards_with_subs, availabilities, regr_params)
-
-    # cleanse card_data
-    for card in card_data.values():
-        card.numberSubstitutes = 0
+    return cards_with_subs, availabilities, card_data
 
 
 def print_inversion_pairs(inversion_pairs):
@@ -1971,6 +2248,9 @@ print("This many pairs of cards: " + str(len(pairs)))
 
 drafts = colour_pair_filter(drafts, colours)
 
+# Set the actual number of drafts
+NUM_DRAFTS = len(drafts)
+
 # Go through the drafts,
 # Appending the information we need for the regression to each card
 parse_pool_info(drafts)
@@ -1988,7 +2268,68 @@ regr_params = {
 }
 
 
-regress_alsa(cards)
+bools = [False, True]
+# Run on Easterling Vanguard and Battle-Scarred Goblin
+# Simple and not Simple
+
+# Baseline Model
+regr_params['simple'] = True
+regr_params['logify'] = False
+regr_params['times_seen'] = True
+regr_params['check_card1_colour'] = True
+regr_params['pick_number'] = False
+regr_params['debug'] = True
+
+#for i in range(20):
+#    POOL_THRESHOLD = 0.05 * i
+
+# Do the relentless Rohirrim Tests
+elasticity_substitution("Relentless Rohirrim", "Easterling Vanguard", regr_params)
+
+
+exit()
+
+# Run the model on combinations of parameters
+good_runs = []
+
+for check_card1_colour in bools:
+    for logify in bools:
+        for pick_number in bools:
+            regr_params['logify'] = logify
+            regr_params['check_card1_colour'] = check_card1_colour
+
+            cards_with_subs, availabilities, card_data = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+
+            # Test the substitutes set  
+            # If it passes all the tests, add it to the list of good runs
+            success_count = test_substitutes_set(cards_with_subs, availabilities, regr_params)
+            if success_count >= 10:
+                good_runs.append((suffix_params(regr_params), success_count))
+
+
+# Sort the good runs by number of successes
+good_runs.sort(key=lambda x: x[1], reverse=True)
+# print each, with the number of successes
+for run in good_runs:
+    print(f"{run[0]}: {run[1]}")
+
+exit()
+# Print the largest substution effects
+# And the larges complement effects
+
+substitutions = []
+for card in cards_with_subs.keys():
+    for sub, elasticity in cards_with_subs[card]:
+        substitutions.append((card, sub, elasticity))
+
+substitutions.sort(key=lambda x: x[2])
+
+print("Largest substitution effects")
+for i in range(1, 11):
+    substitution = substitutions[i - 1]
+    print(f"{substitution[0]} and {substitution[1]}: {substitution[2]}")
+
+regress_alsa(cards, availabilities)
 
 pairs = compute_pairwise_pickrates(pairs, drafts)
 
