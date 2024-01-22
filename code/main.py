@@ -2004,20 +2004,26 @@ def test_subs_card_type(cards_with_subs):
     # check how many of the substitutes are the same card type
     # weighted by elasticity
     avg_same_type_subs = []
-    total_elasticity = 0
 
     for card in cards_with_subs:
+        total_elasticity = 0
+        card_subs_similarity = 0
+
         for sub in cards_with_subs[card]:
             sub_type = name_to_card(sub[0], card_data).cardType
             if sub_type == name_to_card(card, card_data).cardType:
-                avg_same_type_subs.append(1 * abs(sub[1]))
+                card_subs_similarity += abs(sub[1])
             else:
-                avg_same_type_subs.append(0)
+                card_subs_similarity += 0
 
             total_elasticity += abs(sub[1])
 
+        card_subs_similarity /= total_elasticity
+
+        avg_same_type_subs.append(card_subs_similarity)
+
     # Print the average same type subs
-    print(f"Average same type subs: {np.mean(avg_same_type_subs) / total_elasticity}")
+    print(f"Average same type subs: {np.mean(avg_same_type_subs)}")
 
     # Closer to 1 is good
 
@@ -2477,6 +2483,96 @@ def suffix_to_regr_params(suffix):
     return regr_params
 
 
+def test_model_versions():
+
+    regr_params = {
+        'check_card1_colour': True,
+        'check_card2_colour': False,
+        'check_card1_in_pool': False,
+        'logify': False,
+        'pick_number': False,
+        "symmetrical_subs": False,
+        "logify": False,
+        "debug": False,
+        "simple": False,
+        'times_seen': False,
+        'pairwise': False
+    }
+
+    # Try pairwise colour1 with symmetrical subs
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+    mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+    type_similarity = test_subs_card_type(cards_with_subs)
+    colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+
+    runs.append((mv_delta, type_similarity, colour_distance, suffix_params(regr_params)))
+
+    # combinatorially test the parameters
+    bools = [False, True]
+    for logify in bools:
+        for check_card1_colour in bools:
+            for times_seen in bools:
+                for symmetrical_subs in bools:
+                    for pairwise in bools:
+                        for pick_number in bools:
+                            for simple in bools:
+                                regr_params['simple'] = simple
+                                regr_params['logify'] = logify
+                                regr_params['check_card1_colour'] = check_card1_colour
+                                regr_params['times_seen'] = times_seen
+                                regr_params['symmetrical_subs'] = symmetrical_subs
+                                regr_params['pairwise'] = pairwise
+
+                                cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+
+                                mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+                                type_similarity = test_subs_card_type(cards_with_subs)
+                                colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+                                suffix = suffix_params(regr_params)
+
+                                runs.append((mv_delta, type_similarity, colour_distance, suffix))
+
+    # Do regressions with the older model
+
+    # Define the parameters for the elasticity regression
+    regr_params = {
+        "check_card1_colour": False,
+        "check_card2_colour": False,
+        'check_card1_in_pool': False,
+        "pick_number": False,
+        "check_card1_in_pool": False,
+        "symmetrical_subs": True,
+        "logify": True,
+        "debug": False,
+        "simple": True,
+        "pairwise": True,
+    }
+
+    bools = [False, True]
+
+    for logify in bools:
+        for pick_number in bools:
+            for times_seen in bools:
+                regr_params['logify'] = logify
+                regr_params['pick_number'] = pick_number
+                regr_params['times_seen'] = times_seen
+
+                cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+
+                mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+                type_similarity = test_subs_card_type(cards_with_subs)
+                colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+                suffix = suffix_params(regr_params)
+
+                runs.append((mv_delta, type_similarity, colour_distance, suffix))
+    # Sort the runs by delta
+    runs.sort(key=lambda x: x[0])
+
+    # Pretty Print the runs as a markdown table
+    print("| Mana Value Delta | Type Similarity | Colour Distance | Parameters |")
+    for run in runs:
+        print(f"| {run[0]} | {run[1]} | {run[2]} | {run[3]} |")
+
 
 
 
@@ -2613,92 +2709,20 @@ runs = []
 # Appending the information we need for the regression to each card
 parse_pool_info(drafts)
 
+# Do battle-scarred goblin on Rally at the Hornburg
 regr_params = {
-    'check_card1_colour': True,
-    'check_card2_colour': False,
-    'check_card1_in_pool': False,
-    'logify': False,
-    'pick_number': False,
+    "check_card1_colour": True,
+    "check_card2_colour": False,
+    "pick_number": False,
+    "check_card1_in_pool": False,
     "symmetrical_subs": False,
     "logify": False,
     "debug": False,
     "simple": False,
-    'times_seen': False,
-    'pairwise': False
+    "pairwise": False,
 }
 
-# Try pairwise colour1 with symmetrical subs
-cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
-mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-type_similarity = test_subs_card_type(cards_with_subs)
-colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-
-runs.append((mv_delta, type_similarity, colour_distance, suffix_params(regr_params)))
-
-# combinatorially test the parameters
-bools = [False, True]
-for logify in bools:
-    for check_card1_colour in bools:
-        for times_seen in bools:
-            for symmetrical_subs in bools:
-                for pairwise in bools:
-                    for pick_number in bools:
-                        regr_params['logify'] = logify
-                        regr_params['check_card1_colour'] = check_card1_colour
-                        regr_params['times_seen'] = times_seen
-                        regr_params['symmetrical_subs'] = symmetrical_subs
-                        regr_params['pairwise'] = pairwise
-
-                        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
-
-                        mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-                        type_similarity = test_subs_card_type(cards_with_subs)
-                        colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-                        suffix = suffix_params(regr_params)
-
-                        runs.append((mv_delta, type_similarity, colour_distance, suffix))
-
-# Do regressions with the older model
-
-# Define the parameters for the elasticity regression
-regr_params = {
-    "check_card1_colour": False,
-    "check_card2_colour": False,
-    'check_card1_in_pool': False,
-    "pick_number": False,
-    "check_card1_in_pool": False,
-    "symmetrical_subs": True,
-    "logify": True,
-    "debug": False,
-    "simple": True,
-    "pairwise": True,
-}
-
-bools = [False, True]
-
-for logify in bools:
-    for pick_number in bools:
-        for times_seen in bools:
-            regr_params['logify'] = logify
-            regr_params['pick_number'] = pick_number
-            regr_params['times_seen'] = times_seen
-
-            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
-
-            mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-            type_similarity = test_subs_card_type(cards_with_subs)
-            colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-            suffix = suffix_params(regr_params)
-
-            runs.append((mv_delta, type_similarity, colour_distance, suffix))
-# Sort the runs by delta
-runs.sort(key=lambda x: x[0])
-
-# Print the runs
-for run in runs:
-    print(run)
-
-exit()
+elasticity_substitution("Battle-Scarred Goblin", "Rally at the Hornburg", regr_params)
 
 
 # Print the largest substution effects
