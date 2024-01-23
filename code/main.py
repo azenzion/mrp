@@ -594,9 +594,10 @@ def process_draft_pool(draft):
         pick.colourInPool = colour_in_draft_pool
 
         pick.openness_to_colour = {}
-        colours = ["W", "U", "B", "R", "G"]
+        colours = ["W", "U", "B", "R", "G",]
         for colour in colours:
             pick.openness_to_colour[colour] = calculate_openness_to_colour(colour, pick)
+        pick.openness_to_colour["BR"] = np.mean([pick.openness_to_colour["B"], pick.openness_to_colour["R"]])
 
         # Add the regr_info to every card in the pack
         # Every card should contain all picks involving that card
@@ -1188,10 +1189,6 @@ def elasticity_substitution(card1,
     if check_card1_colour:
         card1_colour_count = [x.openness_to_colour[card1_colour] for x in card1_obj.picks]
 
-    # Print the first 50 values of card1_colour_count
-    #if debug:
-    #    print(f"First 50 values of {card1} colour count:")
-    #    print(card1_colour_count[:50])
 
     # Do the same for card2
     if check_card2_colour:
@@ -1852,7 +1849,7 @@ def get_substitutes(cards,
                     refresh=False) -> tuple:
     
     print("Getting substitutes for a list of cards")
-    
+
     cards_with_subs = {}
     cards_with_comps = {}
     for card in cards:
