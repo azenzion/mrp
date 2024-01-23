@@ -9,13 +9,15 @@ import statsmodels.api as sm
 import math
 import pandas as pd
 import matplotlib.pyplot as plt
+import datetime
+from helper import Draft, Pick, Card
 
-
-csv_file_path = os.path.join(os.path.dirname(__file__),
+DRAFTS_CSV_PATH = os.path.join(os.path.dirname(__file__),
                              "..",
                              "data",
                              "draft_data_public.LTR.PremierDraft.csv")
-cardlist_file_path = os.path.join(os.path.dirname(__file__),
+
+CARDNAMES_TXT_PATH = os.path.join(os.path.dirname(__file__),
                                   "..",
                                   "data",
                                   "ltr_cards.txt")
@@ -43,10 +45,20 @@ ELASTICITY_THRESHOLD = 0.0
 COLOURS_THRESHOLD = 5
 POOL_THRESHOLD = 0.5
 
+# Magic numbers
+NUM_HEADERS = 12
+END_OF_PACK = 277
+END_OF_POOL = 2 * END_OF_PACK - NUM_HEADERS - 1
+
+# Dawn of a new age is at the end for some reason
+DAWN_OF_A_NEW_HOPE_PACK = END_OF_POOL + 1
+DAWN_OF_A_NEW_HOPE_POOL = END_OF_POOL + 2
+
 OPTIMIZE_STORAGE = True
 
 cardNamesHash = {}
 cardNumsHash = {}
+card_data = {}
 
 # Harcoded list of red removal spells
 redRemoval = ["Fear, Fire, Foes!",
@@ -75,93 +87,7 @@ def get_colours():
 
     return colour_combinations
 
-
 COLOURS = get_colours()
-
-emptyColoursDict = {}
-for colour in COLOURS:
-    emptyColoursDict[colour] = 0
-
-# Magic numbers
-NUM_HEADERS = 12
-END_OF_PACK = 277
-END_OF_POOL = 2 * END_OF_PACK - NUM_HEADERS - 1
-
-# Dawn of a new age is at the end for some reason
-DAWN_OF_A_NEW_HOPE_PACK = END_OF_POOL + 1
-DAWN_OF_A_NEW_HOPE_POOL = END_OF_POOL + 2
-
-
-# Wrapper for picks
-class Draft:
-
-    def __init__(self):
-        self.draft_id = ""
-        self.picks = []
-
-
-# A draft pick
-class Pick:
-
-    def __init__(self):
-
-        self.draft_id = 0
-        self.pack_number = 0
-        self.pick_number = 0
-        self.pick = 0
-        self.pack_cards = []
-
-        if not OPTIMIZE_STORAGE:
-            self.expansion = ""
-            self.event_type = ""
-            self.draft_time = 0
-            self.rank = 0
-            self.event_match_wins = 0
-            self.event_match_losses = 0
-            self.pick_maindeck_rate = 0.0
-            self.pick_sideboard_in_rate = 0.0
-            self.pool_cards = []
-
-        # We set these later
-        self.numCardInPool = {}
-        self.colourInPool = {}
-
-
-# card
-class Card:
-
-    def __init__(self):
-        self.name = ""
-        self.colour = ""
-        self.rarity = ""
-        self.numberSeen = 0
-        self.alsa = 0.0
-        self.numberPicked = 0
-        self.avgTakenAt = 0.0
-        self.gamesPlayed = 0
-        self.gamesPlayedWinrate = 0.0
-        self.openingHand = 0.0
-        self.openingHandWinrate = 0.0
-        self.gamesDrawn = 0
-        self.gamesDrawnWinrate = 0.0
-        self.gameInHand = 0
-        self.gameInHandWinrate = 0.0
-        self.gamesNotSeen = 0
-        self.gamesNotSeenWinrate = 0.0
-        self.improvementWhenDrawn = 0.0
-        
-        self.manaValue = 0
-        self.cardType = ""
-
-        self.substitutes = []
-        self.timesSeen = 0
-        self.timesPicked = 0
-        self.picks = []
-        self.pairwisePickRate = {}
-
-    # Do sorts by name
-    def __lt__(self, other):
-        return self.name < other.name
 
 
 def get_drafts_from_cache():
@@ -174,7 +100,7 @@ def get_drafts_from_cache():
         return pickle.load(f)
 
 
-def name_to_card(card_name, card_data):
+def name_to_card(card_name):
     if card_name in card_data:
         return card_data[card_name]
 
@@ -208,8 +134,8 @@ def get_cards_from_pair(pair, card_data) -> tuple:
         card1_name = pair.split(" & ")[0]
         card2_name = pair.split(" & ")[1]
 
-    card1 = name_to_card(card1_name, card_data)
-    card2 = name_to_card(card2_name, card_data)
+    card1 = name_to_card(card1_name)
+    card2 = name_to_card(card2_name)
 
     if not card1 or not card2:
         print("ERROR: Card not found in card_data")
@@ -536,8 +462,10 @@ def getCardData():
         # Remove the % and convert to float
         for row in csv_reader:
             nextCard = Card()
+
             if debug:
-                print(row)        
+                print(row)
+
             nextCard.name = row[0]
             nextCard.colour = row[1]
             nextCard.rarity = row[2]
@@ -566,6 +494,9 @@ def getCardData():
 
             card_data[nextCard.name] = nextCard
 
+            nextCard.picks = []
+            nextCard.num_sub_in_pool = {}
+
     return card_data
 
 
@@ -588,7 +519,7 @@ def pickRateColour(packCardName, drafts, num_cards=1):
     timesSeenWithColour = 0
     timesPickedWithColour = 0
 
-    packCard = name_to_card(packCardName, card_data)
+    packCard = name_to_card(packCardName)
     cardColour = packCard.colour
 
     for draft in drafts:
@@ -599,7 +530,7 @@ def pickRateColour(packCardName, drafts, num_cards=1):
             if packCardName in pick.pack_cards:
                 num_colour_cards = 0
                 for poolCardName in pick.pool_cards:
-                    poolCardData = name_to_card(poolCardName, card_data)
+                    poolCardData = name_to_card(poolCardName)
                     poolCardColour = poolCardData.colour
                     if poolCardColour == cardColour:
                         num_colour_cards += 1
@@ -624,43 +555,6 @@ def pickRateColour(packCardName, drafts, num_cards=1):
         print (f"Pick rate of {packCardName} with {num_cards} other {cardColour} cards in the pool: {timesPickedWithColour / timesSeenWithColour}")
 
     return timesPickedWithColour / timesSeenWithColour
-
-
-def append_regr_info_to_card(card, pick):
-    # The information we need to append to the card is
-    # 1 was the card picked
-    # 2 how many copies of the card were in the pool
-    # 3 how many copies of the card were in the pool of the same colour
-    # num_cards in pool to calculate subsitutes later
-
-    pick_for_regr = {}
-    pick_for_regr["wasPicked"] = 0
-    pick_for_regr["sameCardInPool"] = 0
-    pick_for_regr["sameColourInPool"] = 0
-    pick_for_regr["RinPool"] = 0
-    pick_for_regr["BinPool"] = 0
-    pick_for_regr["pack_number"] = pick.pack_number
-
-    # Check if the card was picked
-    if pick.pick == cardNumsHash[card.name]:
-        pick_for_regr["wasPicked"] = 1
-
-    # Check if the card was in the pool
-    if card.name in pick.numCardInPool:
-        pick_for_regr["sameCardInPool"] = pick.numCardInPool[card.name]
-
-    # Check if the card was in the pool of the same colour
-    if card.colour in pick.colourInPool:
-        pick_for_regr["sameColourInPool"] = pick.colourInPool[card.colour]
-
-    pick_for_regr['colourInPool'] = pick.colourInPool
-
-    pick_for_regr["pick_number"] = pick.pick_number
-
-    pick_for_regr["numCardInPool"] = pick.numCardInPool
-
-    card.picks.append(pick_for_regr)
-
 
 
 def dict_increment(dictionary, key):
@@ -691,6 +585,7 @@ def process_draft_pool(draft):
         dict_increment(num_card_in_draft_pool, pick_name)
 
         pool_card_colour = name_to_colour(pick_name, card_data)
+
         # Log colour of card
         dict_increment(colour_in_draft_pool, pool_card_colour)
 
@@ -698,104 +593,20 @@ def process_draft_pool(draft):
         pick.numCardInPool = num_card_in_draft_pool
         pick.colourInPool = colour_in_draft_pool
 
-        # Pool analysis
-        # Count number of coloured cards in the pool
-        for pool_card in num_card_in_draft_pool.keys():
-            card = card_data[pool_card]
+        pick.openness_to_colour = {}
+        colours = ["W", "U", "B", "R", "G"]
+        for colour in colours:
+            pick.openness_to_colour[colour] = calculate_openness_to_colour(colour, pick)
 
-        append_regr_info_to_card(card, pick)
+        # Add the regr_info to every card in the pack
+        # Every card should contain all picks involving that card
+        for card_num in pick.pack_cards:
+            card_name = cardNamesHash[card_num]
+            card = card_data[card_name]
 
-        """
-        # At this point, print the sum of numCardinPool 
-        # and the pick number
-        if debug:
-            print(f"Sum of numCardInPool: {sum(num_card_in_draft_pool.values())}")
-            pick_number = pick.pick_number + 1 + 15 * pick.pack_number
-            print(f"Pick number: {pick_number} ")
-
-        openness_to_red = calculate_openness_to_colour("R", pick)
-        openness_to_black = calculate_openness_to_colour("B", pick)
-        # Print total pick number
-        print(f"Pick number: {pick.pick_number}")
-        # print sorted colourInPool
-        print(f"Sorted colourInPool: {sorted(pick.colourInPool.items(), key=lambda x: x[1], reverse=True)}")
-        print(f"Openness to red: {openness_to_red}")
-        print(f"Openness to black: {openness_to_black}")
-        print(f"========================================")
-        time.sleep(2)
-        """
-        
-        
-        # Print all the picks 
-        # Where there are 4 Easterling Vanguard in pool
-        # Relentless Rohirrim is in the pack
-        # And Relentless Rohirrim is not picked
-        # Print the pick
-        # Print the pool
-        """
-        if "Easterling Vanguard" in pick.numCardInPool:
-            if pick.numCardInPool["Easterling Vanguard"] == 4:
-
-                # Check if Relentless Rohirrim is in the pack
-                rohirrim_in_pack = False
-                for card in pick.pack_cards:
-                    if card == cardNumsHash["Relentless Rohirrim"]:
-                        rohirrim_in_pack = True
-                        break
-                if not rohirrim_in_pack:
-                    continue
-
-                # Check if Relentless Rohirrim was picked
-                if pick.pick == cardNumsHash["Relentless Rohirrim"]:
-                    continue
-
-                print(f"Found 4 Easterling Vanguard in the pool")
-                print(f"Found Relentless Rohirrim in the pack")
-                print(f"Pick was {cardNamesHash[pick.pick]}")
-                # Print colourInPool sorted
-                print(f"ColourInPool: {sorted(pick.colourInPool.items(), key=lambda x: x[1], reverse=True)}")
-                print(f"Openness to red: {calculate_openness_to_colour('R', pick)}")
-                time.sleep(5)
-                """
+            card.picks.append(pick)
 
 
-
-        """
-        # Print any pick where the pack number is 2
-        # There is a Smite the Deathless in the pool
-        # and Voracious Fell Beast is offered
-        # Print what the pick was
-        if pick.pack_number == 2:
-            if "Smite the Deathless" in pick.numCardInPool:
-                # Check if Voracious Fell Beast was in the pack
-                vor = False
-                for card in pick.pack_cards:
-                    if card == cardNumsHash["Voracious Fell Beast"]:
-                        print(f"Found Voracious Fell Beast in the pack")
-                        vor = True
-                        break
-                if not vor:
-                    continue
-
-                if pick.pick == cardNumsHash["Voracious Fell Beast"]:
-                    print("Voracious Fell Beast was picked")
-                    continue
-                else:
-                    print("Voracious Fell Beast was not picked")
-                    print(f"Found Smite the Deathless in the pool")
-                    print(f"Pick was {cardNamesHash[pick.pick]}")
-                    print(f"Pack number was {pick.pack_number}")
-                    print(f"Pick number was {pick.pick_number}")
-                    # Print the full pool
-                    print(f"Pool: {pick.numCardInPool}")
-
-                    # Print the openness to black
-                    openness_to_black = calculate_openness_to_colour("B", pick)
-                    print(f"Openness to black: {openness_to_black}")
-
-                    time.sleep(10)
-
-            """
 
 
 
@@ -808,7 +619,17 @@ def process_draft_pool(draft):
 # We go trough each draft
 # For each pick, we go through the pool
 # If the card is in the pool, we count it
-def parse_pool_info(drafts):
+def parse_pool_info(drafts, cards):
+    filename = os.path.join(os.path.dirname(__file__),
+                            "..",
+                            "data",
+                            "card_data_with_stats.pickle")
+
+    # If there's already a cache read it
+    if os.path.exists(filename):
+        with open(filename, "rb") as f:
+            return pickle.load(f)
+
     timestamp = time.time()
     if debug:
         print(f"Computing draft stats for {len(drafts)} drafts")
@@ -822,10 +643,18 @@ def parse_pool_info(drafts):
     # and a 1 indicates that card2 was chosen
     # We use this for pairwise pick rates
 
-    for draft in drafts:
+    for i, draft in enumerate(drafts):
+
+        # Print every 10000 drafts
+        if i % 10000 == 0:
+            print(f"Processing draft {i}")
         process_draft_pool(draft)
 
     print(f"Time to parse pool info: {time.time() - timestamp}")
+
+    # write the processed drafts to a local cache
+    with open(filename, "wb") as f:
+        pickle.dump(card_data, f)
 
     return card_data
 
@@ -962,8 +791,8 @@ def count_substitutes(pick,
 
     # Count total number of substitutes in the pool
     for card_name in subs_list:
-        if card_name in pick['numCardInPool']:
-            substitutes_count += pick['numCardInPool'][card_name]
+        if card_name in pick.numCardInPool:
+            substitutes_count += pick.numCardInPool[card_name]
 
     for i in num_substitutes.keys():
         if substitutes_count == i:
@@ -1079,31 +908,20 @@ def calculate_openness_to_colour(colour1,
     if colour1 == "BR":
         return (calculate_openness_to_colour("B", pick) + calculate_openness_to_colour("R", pick)) / 2
 
-    if type(pick) is dict:
-        colour_in_pool = pick['colourInPool']
-        pick_number = pick['pick_number']
-        pack_number = pick['pack_number']
-    else:
-        colour_in_pool = pick.colourInPool
-        pick_number = pick.pick_number
-        pack_number = pick.pack_number
-
-    total_picks = pick_number + 1 + 15 * pack_number
-
-    if total_picks == 1:
-        return 1
+    colour_in_pool = pick.colourInPool
+    pick_number = pick.pick_number
+    pack_number = pick.pack_number
 
     # ignore colourless card
     if '' in colour_in_pool:
         del colour_in_pool['']
 
-    # if there is only one colour in the pool
-    # we are open to a second colour
-    if len(colour_in_pool) < 2:
-        return 1
-
     # Calculate openness to colour1
     cards_in_pool = sum(colour_in_pool.values())
+    if cards_in_pool == 0:
+        return 1
+
+    total_picks = pick_number + 1 + 15 * pack_number
 
     colourshares = {
         'W': 0,
@@ -1128,7 +946,6 @@ def calculate_openness_to_colour(colour1,
     for colour in colour_counts.keys():
         colourshares[colour] = colour_counts[colour] / cards_in_pool
 
-
     sorted_shares = sorted(colourshares.items(), key=lambda x: x[1], reverse=True)
 
     top_colour = sorted_shares[0][0]
@@ -1139,40 +956,19 @@ def calculate_openness_to_colour(colour1,
     second_share = sorted_shares[1][1]
     third_share = sorted_shares[2][1]
 
-    top_count = colour_counts[top_colour]
-    second_count = colour_counts[second_colour]
-    third_count = colour_counts[third_colour]
-
     colour1_share = colourshares[colour1]
-    colour1_count = colour_counts[colour1]
 
-    # If colour1 is top, return 1
-    if colour1_count == top_count:
-        return 1
-
-    # If there is no second colour, return 1
-    if second_count == 0:
-        return 1
-
-    # If there is no third colour
-    # return 1 if colour1_count > 0
-    # else return second count
-    if third_count == 0:
-        if colour1_share > 0:
-            return 1
-        else:
-            return 1 / np.log(total_picks + 1)
-
+    return colour1_share
     # If colour1 is second or third
     # We want a number that reflects how large it is relative to second/third
 
     # If colour1 is second
     if colour1_share == second_share:
-        return colour1_count / (colour1_count + third_count)
+        return colour1_share
 
     # If colour1 is third
     if colour1_share == third_share:
-        return colour1_count / (colour1_count + third_count)
+        return 1 - second_share
 
     # Else you are not open to colour1
     return 0
@@ -1207,11 +1003,11 @@ def get_colour_in_pool(pick,
                         card_colour,
                         excludes):
     if card_colour == "R":
-        card_colour_in_pool = pick['colourInPool']['R']
+        card_colour_in_pool = pick.colourInPool['R']
     elif card_colour == "B":
-        card_colour_in_pool = pick['colourInPool']['B']
+        card_colour_in_pool = pick.colourInPool['B']
     elif card_colour == "BR":
-        card_colour_in_pool = pick['colourInPool']['R'] + pick['colourInPool']['B']
+        card_colour_in_pool = pick.colourInPool['R'] + pick.colourInPool['B']
     else:
         for exclude in excludes:
             if exclude in pick['numCardInPool']:
@@ -1221,11 +1017,12 @@ def get_colour_in_pool(pick,
 
 
 def regress_on_all_cards(card1, cards, regr_params={}):
-    card1_obj = name_to_card(card1, card_data)
+    card1_obj = name_to_card(card1)
 
     card1_colour = card1_obj.colour
+    card1_num = cardNumsHash[card1]
 
-    endog = [pick['wasPicked'] for pick in card1_obj.picks]
+    endog = [1 if pick.pick == card1_num else 0 for pick in card1_obj.picks]
 
     # Create one exogenous variable for each card in the set
     exog = np.ones((len(endog), 1))
@@ -1233,7 +1030,7 @@ def regress_on_all_cards(card1, cards, regr_params={}):
 
     for i in range(len(cards)):
         card = cards[i]
-        picked = [pick['numCardInPool'][card] if card in pick['numCardInPool'] else 0 for pick in card1_obj.picks]
+        picked = [pick.numCardInPool[card] if card in pick.numCardInPool else 0 for pick in card1_obj.picks]
         labels.append(card)
 
         if regr_params['logify']:
@@ -1242,17 +1039,17 @@ def regress_on_all_cards(card1, cards, regr_params={}):
         exog = np.column_stack((exog, picked))
 
     if regr_params['check_card1_colour']:
-        openness = [pick['colourInPool'][card1_colour] if card1_colour in pick['colourInPool'] else 0 for pick in card1_obj.picks]
+        openness = [pick.colourInPool[card1_colour] if card1_colour in pick.colourInPool else 0 for pick in card1_obj.picks]
         exog = np.column_stack((exog, openness))
         labels.append(f"Openness to {card1_colour}")
 
     if regr_params['pick_number']:
-        pick_number = [pick['pick_number'] + 1 + (15 * pick['pack_number']) for pick in card1_obj.picks]
+        pick_number = [pick.pick_number + 1 + (15 * pick.pack_number) for pick in card1_obj.picks]
         exog = np.column_stack((exog, pick_number))
         labels.append("Pick number")
 
     if regr_params['times_seen']:
-        times_seen = [0 if pick['pick_number'] < 8 else 1 for pick in card1_obj.picks]
+        times_seen = [0 if pick.pick_number < 8 else 1 for pick in card1_obj.picks]
         exog = np.column_stack((exog, times_seen))
         labels.append("Times seen")
 
@@ -1321,12 +1118,13 @@ def elasticity_substitution(card1,
         subs_list = [subs_list]
 
     # Get colour of cards 1 and 2
-    card1_obj = name_to_card(card1, card_data)
+    card1_obj = name_to_card(card1)
     card1_colour = card1_obj.colour
+    card1_num = cardNumsHash[card1]
 
     # Case where there is only one substitute
     card2 = subs_list[0]
-    card2_obj = name_to_card(subs_list[0], card_data)
+    card2_obj = name_to_card(subs_list[0])
     card2_colour = card2_obj.colour
 
     # This is our dependent variable
@@ -1352,17 +1150,15 @@ def elasticity_substitution(card1,
     for i in range(1, NUM_MULTIPLES + 1):
         num_substitutes[i] = []
 
-    b_in_pool = []
-    r_in_pool = []
-
-    if check_card1_colour or check_card2_colour:
-        b_in_pool = [x['colourInPool']['B'] if 'B' in x['colourInPool'] else 0 for x in card1_obj.picks]
-        r_in_pool = [x['colourInPool']['R'] if 'R' in x['colourInPool'] else 0 for x in card1_obj.picks]
-
-    picked = [x['wasPicked'] for x in card1_obj.picks]
+    if len(card1_obj.picked) == 0:
+        picked = [1 if pick.pick == card1_num else 0 for pick in card1_obj.picks]
+        card1_obj.picked = picked
+        card_data[card1] = card1_obj
+    else:
+        picked = card1_obj.picked
 
     if check_card1_in_pool:
-        card1_in_pool = [x['sameCardInPool'] for x in card1_obj.picks]
+        card1_in_pool = [x.numCardInPool[card1] if card1 in x.numCardInPool else 0 for x in card1_obj.picks]
 
     if not simple:
         for pick in card1_obj.picks:
@@ -1374,49 +1170,44 @@ def elasticity_substitution(card1,
         # Eliminate values that didn't have enough observations
         num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
 
-    simple_num_substitutes = [x['numCardInPool'][card2] if card2 in x['numCardInPool'] else 0 for x in card1_obj.picks]
+    try:
+        simple_num_substitutes = card1_obj.num_sub_in_pool[card2]
+    except KeyError:
+        simple_num_substitutes = [pick.numCardInPool[card2] if card2 in pick.numCardInPool else 0 for pick in card1_obj.picks]
+        card1_obj.num_sub_in_pool[card2] = simple_num_substitutes
+        card_data[card1] = card1_obj
 
     if logify:
-        simple_num_substitutes = [np.log(x + 1) for x in simple_num_substitutes]
+        try:
+            simple_num_substitutes = card1_obj.logified_num_in_pool[card2]
+        except KeyError:
+            simple_num_substitutes = [np.log(x + 1) for x in simple_num_substitutes]
+            card1_obj.logified_num_in_pool[card2] = simple_num_substitutes
+            card_data[card1] = card1_obj
 
     if check_card1_colour:
-        if card1_colour == "R":
-            card1_colour_count = r_in_pool
-        elif card1_colour == "B":
-            card1_colour_count = b_in_pool
-        elif card1_colour == "BR":
-            card1_colour_count = [x + y for x, y in zip(r_in_pool, b_in_pool)]
-
-        # replace card1_colour_count with openness to colour1
-        # a player is 1 if they are not committed to 2 colours
-        # and the portion of the pool that is colour1 if they are
-        card1_colour_count = [calculate_openness_to_colour(card1_colour, pick) for pick in card1_obj.picks]
+        card1_colour_count = [x.openness_to_colour[card1_colour] for x in card1_obj.picks]
 
     # Print the first 50 values of card1_colour_count
-    if debug:
-        print(f"First 50 values of {card1} colour count:")
-        print(card1_colour_count[:50])
+    #if debug:
+    #    print(f"First 50 values of {card1} colour count:")
+    #    print(card1_colour_count[:50])
 
     # Do the same for card2
     if check_card2_colour:
-        if card2_colour == "R":
-            card2_colour_count = r_in_pool
-        elif card2_colour == "B":
-            card2_colour_count = b_in_pool
-        elif card2_colour == "BR":
-            card2_colour_count = [x + y for x, y in zip(r_in_pool, b_in_pool)]
 
         # replace card2_colour_count with openness to colour2
-        card2_colour_count = [calculate_openness_to_colour(card2_colour, pick) for pick in card1_obj.picks]
+        card2_colour_count = [x.openness_to_colour[card2_colour] for x in card1_obj.picks]
 
     # Create the pick_number array
     pick_number_list = []
 
-    pick_number_list = [15 * x['pack_number'] + x['pick_number'] + 1 for x in card1_obj.picks]
+    #pick_number_list = [15 * x['pack_number'] + x['pick_number'] + 1 for x in card1_obj.picks]
+    pick_number_list = [x.pick_number + 1 for x in card1_obj.picks]
 
     # Create a variable that represents the number of times you are seeing the card this pack
     if times_seen:
-        times_seen = [0 if x['pick_number'] < 8 else 1 for x in card1_obj.picks]
+        times_seen = [0 if x.pick_number < 8 else 1 for x in card1_obj.picks]
 
     # Create the matrices for the regression
     if not simple:
@@ -1475,6 +1266,9 @@ def elasticity_substitution(card1,
 
         endog = picked
 
+        if debug:
+            print(f"Number of picks involving card: {len(endog)}")
+
         # Initialize exog to a column of ones
         # this is the constant term
         exog = np.ones((len(simple_num_substitutes), 1))
@@ -1483,6 +1277,11 @@ def elasticity_substitution(card1,
         # Add the number of substitutes in the pool
         exog = np.column_stack((exog, simple_num_substitutes))
         labels.append(f"{card2} in pool")
+
+        if debug:
+            print(f"Number of substitutes in pool: {len(simple_num_substitutes)}")
+
+
         if logify:
             labels[-1] += " (log)"
 
@@ -1493,9 +1292,14 @@ def elasticity_substitution(card1,
             exog = np.column_stack((exog, card1_in_pool))
             labels.append(f"{card1} in pool")
 
+            if debug:
+                print(f"Number of {card1} in pool: {len(card1_in_pool)}")
+
         if check_card1_colour:
             exog = np.column_stack((exog, card1_colour_count))
             labels.append(f"Opennness to {card1_colour}")
+            if debug:
+                print(f"Number of {card1_colour} in pool: {len(card1_colour_count)}")
 
         if check_card2_colour:
             exog = np.column_stack((exog, card2_colour_count))
@@ -1569,7 +1373,7 @@ def regress_alsa(cards, availabilities):
 
     # Populate the data frame
     for card in cards:
-        card_obj = name_to_card(card, card_data)
+        card_obj = name_to_card(card)
         try:
             availability_score = availabilities[card]
             #number_substitutes = np.log(availability_score + 1)
@@ -1593,7 +1397,7 @@ def regress_alsa(cards, availabilities):
     # no number of substitutes
     simple_regression_data = []
     for card in cards:
-        card_obj = name_to_card(card, card_data)
+        card_obj = name_to_card(card)
         gih_winrate = card_obj.gameInHandWinrate
         alsa = card_obj.alsa
 
@@ -1897,8 +1701,8 @@ def test_subs_mana_value(cards_with_subs,
     for card in cards_with_subs:
         running_val = []
         for substitute, elasticity in cards_with_subs[card]:
-            mana_value = name_to_card(substitute, card_data).manaValue
-            mana_value_card.append(name_to_card(card, card_data).manaValue)
+            mana_value = name_to_card(substitute).manaValue
+            mana_value_card.append(name_to_card(card).manaValue)
 
             running_val.append((mana_value, abs(elasticity)))
 
@@ -1914,7 +1718,7 @@ def test_subs_mana_value(cards_with_subs,
         # Weighted by elasticity
         running_val = []
         for complement, elasticity in cards_with_comps[card]:
-            comp_mana_value = name_to_card(complement, card_data).manaValue
+            comp_mana_value = name_to_card(complement).manaValue
             running_val.append((comp_mana_value, abs(elasticity)))
 
         # Get the average mana value of the substitutes
@@ -1974,8 +1778,8 @@ def test_subs_colour(cards_with_subs,
 
         sub_distance = 0
         for sub in sorted_subs:
-            sub_colour = name_to_card(sub[0], card_data).colour
-            if sub_colour != name_to_card(card, card_data).colour:
+            sub_colour = name_to_card(sub[0]).colour
+            if sub_colour != name_to_card(card).colour:
                 break
             sub_distance += 1
 
@@ -1983,8 +1787,8 @@ def test_subs_colour(cards_with_subs,
 
         comp_distance = 0
         for comp in sorted_comps:
-            comp_colour = name_to_card(comp[0], card_data).colour
-            if comp_colour != name_to_card(card, card_data).colour:
+            comp_colour = name_to_card(comp[0]).colour
+            if comp_colour != name_to_card(card).colour:
                 break
             comp_distance += 1
 
@@ -2010,8 +1814,8 @@ def test_subs_card_type(cards_with_subs):
         card_subs_similarity = 0
 
         for sub in cards_with_subs[card]:
-            sub_type = name_to_card(sub[0], card_data).cardType
-            if sub_type == name_to_card(card, card_data).cardType:
+            sub_type = name_to_card(sub[0]).cardType
+            if sub_type == name_to_card(card).cardType:
                 card_subs_similarity += abs(sub[1])
             else:
                 card_subs_similarity += 0
@@ -2046,7 +1850,9 @@ def test_subs_card_type(cards_with_subs):
 def get_substitutes(cards,
                     regr_params,
                     refresh=False) -> tuple:
+    
     print("Getting substitutes for a list of cards")
+    
     cards_with_subs = {}
     cards_with_comps = {}
     for card in cards:
@@ -2268,7 +2074,7 @@ def colour_pair_filter(drafts, colours):
 
         for pick in draft.picks:
             pick_name = cardNamesHash[pick.pick]
-            card_obj = name_to_card(pick_name, card_data)
+            card_obj = name_to_card(pick_name)
             pick_colour = card_obj.colour
 
             if pick_colour in colours[0]:
@@ -2301,8 +2107,8 @@ def colour_pair_filter(drafts, colours):
         exit(1)
 
     # Overwrite the cache to eliminate drafts where the drafter did not end up with at least 6 red and 6 black cards
-    with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
-        pickle.dump(drafts, f)
+    #with open(os.path.join(os.path.dirname(__file__), "..", "data", "drafts.pickle"), "wb") as f:
+    #    pickle.dump(drafts, f)
 
     return drafts
 
@@ -2479,92 +2285,95 @@ def suffix_to_regr_params(suffix):
         regr_params['simple'] = True
     if "pairwise" in suffix:
         regr_params['pairwise'] = True
+    if "filter" in suffix:
+        regr_params['colour_pair_filter'] = True
 
     return regr_params
 
 
 def test_model_versions():
+    bools = [True, False]
 
+    runs = []
+    # This is our current best candidate model
+    # pairwise, colour1, log
     regr_params = {
         'check_card1_colour': True,
         'check_card2_colour': False,
         'check_card1_in_pool': False,
-        'logify': False,
+        'logify': True,
         'pick_number': False,
-        "symmetrical_subs": False,
-        "logify": False,
+        "symmetrical_subs": True,
         "debug": False,
-        "simple": False,
+        "simple": True,
         'times_seen': False,
-        'pairwise': False
+        'pairwise': True
     }
 
-    # Try pairwise colour1 with symmetrical subs
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+
+    suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
     type_similarity = test_subs_card_type(cards_with_subs)
     colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
 
-    runs.append((mv_delta, type_similarity, colour_distance, suffix_params(regr_params)))
+    runs.append((mv_delta, type_similarity, colour_distance, suffix))
+    # Sort the runs by delta
+    runs.sort(key=lambda x: x[0])
 
-    # combinatorially test the parameters
-    bools = [False, True]
-    for logify in bools:
-        for check_card1_colour in bools:
-            for times_seen in bools:
-                for symmetrical_subs in bools:
-                    for pairwise in bools:
-                        for pick_number in bools:
-                            for simple in bools:
-                                regr_params['simple'] = simple
-                                regr_params['logify'] = logify
-                                regr_params['check_card1_colour'] = check_card1_colour
-                                regr_params['times_seen'] = times_seen
-                                regr_params['symmetrical_subs'] = symmetrical_subs
-                                regr_params['pairwise'] = pairwise
+    # Do a run of pairwise with no colour1
+    # no log
+    regr_params['logify'] = False
+    regr_params['check_card1_colour'] = False
 
-                                cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+    suffix = suffix_params(regr_params)
+    mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+    type_similarity = test_subs_card_type(cards_with_subs)
+    colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+    runs.append((mv_delta, type_similarity, colour_distance, suffix))
 
-                                mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-                                type_similarity = test_subs_card_type(cards_with_subs)
-                                colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-                                suffix = suffix_params(regr_params)
+    # Log, still no colour1
+    regr_params['logify'] = True
 
-                                runs.append((mv_delta, type_similarity, colour_distance, suffix))
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+    suffix = suffix_params(regr_params)
+    mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+    type_similarity = test_subs_card_type(cards_with_subs)
+    colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+    runs.append((mv_delta, type_similarity, colour_distance, suffix))
 
-    # Do regressions with the older model
+    # Restore colour1
+    regr_params['check_card1_colour'] = True
+    # Try with and without symmetrical subs
+    for sym in bools:
+        regr_params['symmetrical_subs'] = sym
 
-    # Define the parameters for the elasticity regression
-    regr_params = {
-        "check_card1_colour": False,
-        "check_card2_colour": False,
-        'check_card1_in_pool': False,
-        "pick_number": False,
-        "check_card1_in_pool": False,
-        "symmetrical_subs": True,
-        "logify": True,
-        "debug": False,
-        "simple": True,
-        "pairwise": True,
-    }
+        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+        suffix = suffix_params(regr_params)
+        mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+        type_similarity = test_subs_card_type(cards_with_subs)
+        colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+        runs.append((mv_delta, type_similarity, colour_distance, suffix))
 
-    bools = [False, True]
+    # combinatorially check the rest if we have extra time
+    for parameter in regr_params.keys():
+        if parameter == 'debug':
+            continue
+        for bool in bools:
+            regr_params[f"{parameter}"] = bool
+            suffix = suffix_params(regr_params)
 
-    for logify in bools:
-        for pick_number in bools:
-            for times_seen in bools:
-                regr_params['logify'] = logify
-                regr_params['pick_number'] = pick_number
-                regr_params['times_seen'] = times_seen
+            print(f"Testing model: {suffix}")
 
-                cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
 
-                mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-                type_similarity = test_subs_card_type(cards_with_subs)
-                colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-                suffix = suffix_params(regr_params)
+            mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
+            type_similarity = test_subs_card_type(cards_with_subs)
+            colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
 
-                runs.append((mv_delta, type_similarity, colour_distance, suffix))
+            runs.append((mv_delta, type_similarity, colour_distance, suffix))
+
     # Sort the runs by delta
     runs.sort(key=lambda x: x[0])
 
@@ -2606,6 +2415,10 @@ def suffix_params(regr_params):
     # Times seen
     if 'times_seen' in regr_params and regr_params['times_seen']:
         filename += "_times_seen"
+
+    # colour pair filter
+    if 'colour_pair_filter' in regr_params and regr_params['colour_pair_filter']:
+        filename += "_filter"
 
     return filename
 
@@ -2653,7 +2466,7 @@ if __name__ != "__main__":
     exit()
 
 ltr_cards = []
-with open(cardlist_file_path, "r") as f:
+with open(CARDNAMES_TXT_PATH, "r") as f:
     for line in f:
         ltr_cards.append(line.strip())
 
@@ -2665,15 +2478,41 @@ for i in range(NUM_CARDS_IN_SET):
     cardNamesHash[i] = ltr_cards[i]
     cardNumsHash[ltr_cards[i]] = i
 
-drafts = parse_drafts(csv_file_path, ltr_cards, NUM_DRAFTS)
-
-print("There are this many drafts in the data set: " + str(len(drafts)))
-
-card_data = getCardData()
-
 colours = ["R", "B"]
 
+# Get unmodified card data
+# we will append info to this
+card_data = getCardData()
+
 cards, pairs = get_pairs(colours, card_data, rares=False)
+
+# If there's already card_data with stats
+# don't need to parse_drafts at all
+if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle")):
+    # print the filename
+    start_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    print(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle"))
+    card_data = pickle.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle"), "rb"))
+
+    delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
+    print(f"Time to load card_data_with_stats.pickle: {delta_time}")
+
+else:
+    start_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    drafts = parse_drafts(DRAFTS_CSV_PATH, ltr_cards, NUM_DRAFTS)
+
+    # Set the actual number of drafts
+    NUM_DRAFTS = len(drafts)
+
+    print("There are this many drafts in the data set: " + str(len(drafts)))
+
+    filtered_drafts = colour_pair_filter(drafts, colours)
+
+    # Go through the drafts,
+    # Appending the information we need for the regression to each card
+    card_data = parse_pool_info(drafts, cards)
+
+    delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
 
 print("This many pairs of cards: " + str(len(pairs)))
 
@@ -2699,31 +2538,9 @@ for card in card_data.values():
     if card.manaValue is None:
         card.manaValue = 0
 
-#drafts = colour_pair_filter(drafts, colours)
 
-# Set the actual number of drafts
-NUM_DRAFTS = len(drafts)
-runs = []
-
-# Go through the drafts,
-# Appending the information we need for the regression to each card
-parse_pool_info(drafts)
-
-# Do battle-scarred goblin on Rally at the Hornburg
-regr_params = {
-    "check_card1_colour": True,
-    "check_card2_colour": False,
-    "pick_number": False,
-    "check_card1_in_pool": False,
-    "symmetrical_subs": False,
-    "logify": False,
-    "debug": False,
-    "simple": False,
-    "pairwise": False,
-}
-
-elasticity_substitution("Battle-Scarred Goblin", "Rally at the Hornburg", regr_params)
-
+test_model_versions()
+exit()
 
 # Print the largest substution effects
 # And the larges complement effects
@@ -2739,6 +2556,39 @@ print("Largest substitution effects")
 for i in range(1, 11):
     substitution = substitutions[i - 1]
     print(f"{substitution[0]} and {substitution[1]}: {substitution[2]}")
+
+complementations = []
+for card in cards_with_comps.keys():
+    for comp, elasticity in cards_with_comps[card]:
+        complementations.append((card, comp, elasticity))
+
+complementations.sort(key=lambda x: x[2], reverse=True)
+
+# Eliminate any complement effects that are between a card and itself
+# This is to eliminate the effect of the constant
+#temp = []
+#for complementation in complementations:
+#    if complementation[0] != complementation[1]:
+ #       temp.append(complementation)
+
+#complementations = temp
+
+print("Largest complement effects")
+for i in range(1, 11):
+    complementation = complementations[i - 1]
+    print(f"{complementation[0]} and {complementation[1]}: {complementation[2]}")
+
+# Print the largest availability scores
+sorted_availabilities = sorted(availabilities.items(),
+                               key=lambda x: x[1],
+                               reverse=True)
+
+print("Largest availability scores")
+for i in range(1, 11):
+    availability = sorted_availabilities[i - 1]
+    print(f"{availability[0]}: {availability[1]}")
+
+exit()
 
 regress_alsa(cards, availabilities)
 
