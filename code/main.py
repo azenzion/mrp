@@ -109,7 +109,7 @@ def name_to_card(card_name):
     exit(1)
 
 
-def name_to_colour(card_name, card_data):
+def name_to_colour(card_name):
 
     # If given a number, convert to a string
     if type(card_name) is int:
@@ -126,7 +126,7 @@ def name_to_colour(card_name, card_data):
 # Return card data for two cards
 # If the input is a tuple, it is assumed to be a pair
 # If the input is a string, it is assumed to be a pair of the form "card1 & card2"
-def get_cards_from_pair(pair, card_data) -> tuple:
+def get_cards_from_pair(pair) -> tuple:
     if type(pair) is tuple:
         card1_name = str(pair[0])
         card2_name = str(pair[1])
@@ -346,7 +346,6 @@ def parse_drafts(csv_file_path, ltr_cards, numDrafts):
 # More Picked Card, Less Picked Card
 # Values are higher pick rate, lower pick rate, higher winrate, lower winrate, inversion
 def find_inversion_pairs(pairs,
-                         card_data,
                          only_return_inverted=True,
                          simple_inversion_score=False,
                          ) -> dict:
@@ -372,7 +371,7 @@ def find_inversion_pairs(pairs,
 
     # Get all pairs and their pick rates
     for pair in pairs.keys():
-        card1, card2 = get_cards_from_pair(pair, card_data)
+        card1, card2 = get_cards_from_pair(pair)
         card1_name = card1.name
         card2_name = card2.name
 
@@ -584,7 +583,7 @@ def process_draft_pool(draft):
         # Log card
         dict_increment(num_card_in_draft_pool, pick_name)
 
-        pool_card_colour = name_to_colour(pick_name, card_data)
+        pool_card_colour = name_to_colour(pick_name)
 
         # Log colour of card
         dict_increment(colour_in_draft_pool, pool_card_colour)
@@ -620,7 +619,7 @@ def process_draft_pool(draft):
 # We go trough each draft
 # For each pick, we go through the pool
 # If the card is in the pool, we count it
-def parse_pool_info(drafts, cards):
+def parse_pool_info(drafts):
     filename = os.path.join(os.path.dirname(__file__),
                             "..",
                             "data",
@@ -657,10 +656,8 @@ def parse_pool_info(drafts, cards):
     with open(filename, "wb") as f:
         pickle.dump(card_data, f)
 
-    return card_data
 
-
-def compareSubstitutes(card1, card2, cardList, card_data):
+def compareSubstitutes(card1, card2, cardList):
 
     # Compute the substitutes for a card within a list of cards
     # hang on to the complements even though we don't use them at the moment
@@ -2001,8 +1998,7 @@ def get_substitutes(cards,
 # The second card is the less picked card
 # The third element is the difference in pick rate between the two cards
 # The fourth element is the difference in substitutes seen between the cards
-def regress_inversion_pairs(inversion_pairs,
-                            card_data):
+def regress_inversion_pairs(inversion_pairs):
     print("Regressing pick rate difference on substitutes seen difference")
 
     dependent_var = "Pickrate Difference (Card 1 - Card 2)"
@@ -2011,7 +2007,7 @@ def regress_inversion_pairs(inversion_pairs,
     regr_data = []
 
     for pair in inversion_pairs.keys():
-        card1, card2 = get_cards_from_pair(pair, card_data)
+        card1, card2 = get_cards_from_pair(pair)
 
         if type(card1) is Card:
             card1 = card1.name
@@ -2170,7 +2166,6 @@ def log_availabilities(availabilities, cards_with_subs, regr_params):
 
 
 def compute_availability(cards_with_subs,
-                         card_data,
                          regr_params,
                          ):
     print("Computing availability of substitutes")
@@ -2185,7 +2180,7 @@ def compute_availability(cards_with_subs,
     if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", filename)):
         print("Found local cache of availabilities")
         with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "rb") as f:
-            return pickle.load(f), card_data
+            return pickle.load(f)
     availabilities = {}
 
     for card, substitutes in cards_with_subs.items():
@@ -2209,13 +2204,13 @@ def compute_availability(cards_with_subs,
     with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "wb") as f:
         pickle.dump(availabilities, f)
 
-    return availabilities, card_data
+    return availabilities
 
 
-def get_pairs(colours, card_data, rares):
+def get_pairs(colours, rares):
     cards = []
 
-    cards = get_cards_in_colours(card_data, colours, rares)
+    cards = get_cards_in_colours(colours, rares)
 
     pairs = []
     for card1 in cards:
@@ -2230,7 +2225,7 @@ def get_pairs(colours, card_data, rares):
     return cards, pairs
 
 
-def get_cards_in_colours(card_data, colours, rares):
+def get_cards_in_colours(colours, rares):
     cards = []
 
     all_colours = ["W", "U", "B", "R", "G"]
@@ -2315,7 +2310,7 @@ def test_model_versions():
         'pairwise': True
     }
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
 
     suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
@@ -2331,7 +2326,7 @@ def test_model_versions():
     regr_params['logify'] = False
     regr_params['check_card1_colour'] = False
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
     suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
     type_similarity = test_subs_card_type(cards_with_subs)
@@ -2341,7 +2336,7 @@ def test_model_versions():
     # Log, still no colour1
     regr_params['logify'] = True
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
     suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
     type_similarity = test_subs_card_type(cards_with_subs)
@@ -2354,7 +2349,7 @@ def test_model_versions():
     for sym in bools:
         regr_params['symmetrical_subs'] = sym
 
-        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
         suffix = suffix_params(regr_params)
         mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
         type_similarity = test_subs_card_type(cards_with_subs)
@@ -2371,7 +2366,7 @@ def test_model_versions():
 
             print(f"Testing model: {suffix}")
 
-            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
+            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
 
             mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
             type_similarity = test_subs_card_type(cards_with_subs)
@@ -2430,7 +2425,6 @@ def suffix_params(regr_params):
 
 
 def generate_subs_groupings(cards,
-                            card_data,
                             regr_params,
                             refresh):
 
@@ -2441,9 +2435,7 @@ def generate_subs_groupings(cards,
     cards_with_subs, cards_with_comps = get_substitutes(cards, regr_params, refresh)
 
     # Compute the availability of each card
-    availabilities, card_data = compute_availability(cards_with_subs,
-                                                     card_data,
-                                                     regr_params)
+    availabilities = compute_availability(cards_with_subs, regr_params)
 
     # Log the availabilities
     log_availabilities(availabilities, cards_with_subs, regr_params)
@@ -2459,7 +2451,7 @@ def print_inversion_pairs(inversion_pairs):
 
     # Print each pair and its inversion
     for pair, pair_info in sorted_inversion_pairs:
-        card1, card2 = get_cards_from_pair(pair, card_data)
+        card1, card2 = get_cards_from_pair(pair)
         print(f"{card1.name} and {card2.name}: {pair_info['inversion']}")
 
 # Print inverted pairs and exit
@@ -2489,7 +2481,7 @@ colours = ["R", "B"]
 # we will append info to this
 card_data = getCardData()
 
-cards, pairs = get_pairs(colours, card_data, rares=False)
+cards, pairs = get_pairs(colours, rares=False)
 
 # If there's already card_data with stats
 # don't need to parse_drafts at all
@@ -2515,7 +2507,7 @@ else:
 
     # Go through the drafts,
     # Appending the information we need for the regression to each card
-    card_data = parse_pool_info(drafts, cards)
+    parse_pool_info(drafts)
 
     delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
 
@@ -2600,8 +2592,8 @@ regress_alsa(cards, availabilities)
 pairs = compute_pairwise_pickrates(pairs, drafts)
 
 
-inversion_pairs = find_inversion_pairs(pairs, card_data)
+inversion_pairs = find_inversion_pairs(pairs)
 
 print_inversion_pairs(inversion_pairs)
 
-regress_inversion_pairs(inversion_pairs, card_data)
+regress_inversion_pairs(inversion_pairs)
