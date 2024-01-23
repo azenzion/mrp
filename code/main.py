@@ -1706,6 +1706,8 @@ def test_subs_mana_value(cards_with_subs,
         # Get the average mana value of the substitutes
         # Weighted by elasticity
         total_elasticity = sum([x[1] for x in running_val])
+        if total_elasticity == 0:
+            continue
         average_mana_value_subs = sum([x[0] * x[1] for x in running_val]) / total_elasticity
 
         mana_value_subs.append(average_mana_value_subs)
@@ -1721,6 +1723,8 @@ def test_subs_mana_value(cards_with_subs,
         # Get the average mana value of the substitutes
         # Weighted by elasticity
         total_elasticity = sum([x[1] for x in running_val])
+        if total_elasticity == 0:
+            continue
         average_mana_value_comps = sum([x[0] * x[1] for x in running_val]) / total_elasticity
 
         mana_value_comps.append(average_mana_value_comps)
@@ -2307,7 +2311,7 @@ def test_model_versions():
         'pairwise': True
     }
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
 
     suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
@@ -2323,7 +2327,7 @@ def test_model_versions():
     regr_params['logify'] = False
     regr_params['check_card1_colour'] = False
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
     suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
     type_similarity = test_subs_card_type(cards_with_subs)
@@ -2333,7 +2337,7 @@ def test_model_versions():
     # Log, still no colour1
     regr_params['logify'] = True
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
     suffix = suffix_params(regr_params)
     mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
     type_similarity = test_subs_card_type(cards_with_subs)
@@ -2346,7 +2350,7 @@ def test_model_versions():
     for sym in bools:
         regr_params['symmetrical_subs'] = sym
 
-        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
         suffix = suffix_params(regr_params)
         mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
         type_similarity = test_subs_card_type(cards_with_subs)
@@ -2363,7 +2367,7 @@ def test_model_versions():
 
             print(f"Testing model: {suffix}")
 
-            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=True)
+            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, card_data, regr_params, refresh=False)
 
             mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
             type_similarity = test_subs_card_type(cards_with_subs)
