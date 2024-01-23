@@ -1695,67 +1695,68 @@ def test_subs_mana_value(cards_with_subs,
     mana_value_subs = []
     mana_value_comps = []
 
-    for card in cards_with_subs:
-        running_val = []
-        for substitute, elasticity in cards_with_subs[card]:
-            mana_value = name_to_card(substitute).manaValue
-            mana_value_card.append(name_to_card(card).manaValue)
+    total_elasticity_of_subs = {}
+    total_elasticity_of_comps = {}
 
-            running_val.append((mana_value, abs(elasticity)))
+    dict_mv_of_subs = {}
+    dict_mv_of_comps = {}
 
-        # Get the average mana value of the substitutes
-        # Weighted by elasticity
-        total_elasticity = sum([x[1] for x in running_val])
-        if total_elasticity == 0:
+
+    for card in cards_with_subs.keys():
+
+        # ignore cards with no substitutes
+        # or no complements
+        if len(cards_with_subs[card]) == 0 or len(cards_with_comps[card]) == 0:
             continue
-        average_mana_value_subs = sum([x[0] * x[1] for x in running_val]) / total_elasticity
 
-        mana_value_subs.append(average_mana_value_subs)
 
-    for card in cards_with_comps:
-        # Get the average mana value of the complements
-        # Weighted by elasticity
-        running_val = []
-        for complement, elasticity in cards_with_comps[card]:
-            comp_mana_value = name_to_card(complement).manaValue
-            running_val.append((comp_mana_value, abs(elasticity)))
+        mv_of_card = name_to_card(card).manaValue
 
-        # Get the average mana value of the substitutes
-        # Weighted by elasticity
-        total_elasticity = sum([x[1] for x in running_val])
-        if total_elasticity == 0:
-            continue
-        average_mana_value_comps = sum([x[0] * x[1] for x in running_val]) / total_elasticity
+        mv_of_subs = [name_to_card(sub[0]).manaValue for sub in cards_with_subs[card]]
 
-        mana_value_comps.append(average_mana_value_comps)
+        elasticities_of_subs = [abs(elasticity) for _, elasticity in cards_with_subs[card]]
 
-    # For cards, the difference between mana value and mana value of substitutes
-    # should be SMALLER than the diference between mana value and mana value of complements
-    # If this is not the case, the substitutes are not good substitutes
-    # If this is the case, the substitutes are good substitutes
+        total_elasticity_of_subs = sum(elasticities_of_subs)
 
-    good_cards = []
-    bad_cards = []
-    delta_subs_all = []
-    delta_comps_all = []
-    for i, card in enumerate(cards_with_subs):
-        delta_subs = abs(mana_value_card[i] - mana_value_subs[i])
-        delta_comps = abs(mana_value_card[i] - mana_value_comps[i])
+        # Calculate weighted mana value of subs
+        dict_mv_of_subs[card] = 0
+        for i in range(len(mv_of_subs)):
+            dict_mv_of_subs[card] += mv_of_subs[i] * elasticities_of_subs[i]
 
-        delta_subs_all.append(delta_subs)
-        delta_comps_all.append(delta_comps)
+        dict_mv_of_subs[card] /= total_elasticity_of_subs
 
-        if delta_subs > delta_comps:
-            bad_cards.append(card)
-        else:
-            good_cards.append(card)
+        # Comps
+        mv_of_comps = [name_to_card(comp[0]).manaValue for comp in cards_with_comps[card]]
 
-    # Print the average delta subs and delta comps
-    print(f"Average delta subs: {np.mean(delta_subs_all)}")
-    print(f"Average delta comps: {np.mean(delta_comps_all)}")
+        elasticities_of_comps = [abs(elasticity) for _, elasticity in cards_with_comps[card]]
 
-    # Return average delta comps minus average delta subs
-    return np.mean(delta_comps_all) - np.mean(delta_subs_all)
+        total_elasticity_of_comps = sum(elasticities_of_comps)
+
+        # Calculate weighted mana value of comps
+        dict_mv_of_comps[card] = 0
+        for i in range(len(mv_of_comps)):
+            dict_mv_of_comps[card] += mv_of_comps[i] * elasticities_of_comps[i]
+
+        dict_mv_of_comps[card] /= total_elasticity_of_comps
+
+    cards_that_have_subs = list(dict_mv_of_subs.keys())
+
+    # calculate the average difference betwen a card's mana value 
+    # and the avarage mana value of its substitutes
+    # for all cards in the selection
+    delta_subs_all = [abs(name_to_card(card).manaValue - dict_mv_of_subs[card]) for card in cards_that_have_subs]
+
+    delta_comps_all = [abs(name_to_card(card).manaValue - dict_mv_of_comps[card]) for card in cards_that_have_subs]
+
+    delta_subs = np.mean(delta_subs_all)
+    delta_comps = np.mean(delta_comps_all)
+
+    # Print the two
+    print(f"Average difference between mana value and average mana value of substitutes: {delta_subs}")
+    print(f"Average difference between mana value and average mana value of complements: {delta_comps}")
+
+    # Return the average difference between mana value and average mana value of substitutes
+    return delta_comps - delta_subs
 
 
 # Ideally, substitutes should not have all the same colour
@@ -1811,6 +1812,9 @@ def test_subs_card_type(cards_with_subs):
     avg_same_type_subs = []
 
     for card in cards_with_subs:
+        if len(cards_with_subs[card]) == 0:
+            continue
+
         total_elasticity = 0
         card_subs_similarity = 0
 
