@@ -73,6 +73,8 @@ class Card:
         self.num_sub_in_pool = {}
         self.logified_num_in_pool = {}
 
+        self.complex_subs_in_pool = {}
+
     # Do sorts by name
     def __lt__(self, other):
         return self.name < other.name

@@ -25,8 +25,8 @@ CARDNAMES_TXT_PATH = os.path.join(os.path.dirname(__file__),
 
 debug = False
 
-#NUM_DRAFTS = 162153
-NUM_DRAFTS = 1000
+NUM_DRAFTS = 162153
+#NUM_DRAFTS = 10000
 
 # The number of multiples in the pool to consider
 # This just needs to be larger than we're likely to see
@@ -60,6 +60,7 @@ OPTIMIZE_STORAGE = True
 cardNamesHash = {}
 cardNumsHash = {}
 card_data = {}
+picks = {}
 
 # Harcoded list of red removal spells
 redRemoval = ["Fear, Fire, Foes!",
@@ -359,10 +360,10 @@ def find_inversion_pairs(pairs,
                                     "inversion_pairs.pickle")):
         print("Found local cache of inversion pairs")
         with open(os.path.join(os.path.dirname(__file__),
-                                 "..",
-                                 "data",
-                                 "inversion_pairs.pickle"),
-                    "rb") as f:
+                               "..",
+                               "data",
+                               "inversion_pairs.pickle"),
+                  "rb") as f:
                 return pickle.load(f)
 
     inversion_pairs = {}
@@ -597,7 +598,13 @@ def process_draft_pool(draft):
         colours = ["W", "U", "B", "R", "G",]
         for colour in colours:
             pick.openness_to_colour[colour] = calculate_openness_to_colour(colour, pick)
+
+        # Calculate openness to BR
         pick.openness_to_colour["BR"] = np.mean([pick.openness_to_colour["B"], pick.openness_to_colour["R"]])
+
+        # Generate a unique id for the pick
+        pick.id = f"{pick.draft_id}_{pick.pick_number}_{pick.pick}"
+        picks[pick.id] = pick
 
         # Add the regr_info to every card in the pack
         # Every card should contain all picks involving that card
@@ -605,7 +612,7 @@ def process_draft_pool(draft):
             card_name = cardNamesHash[card_num]
             card = card_data[card_name]
 
-            card.picks.append(pick)
+            card.picks.append(pick.id)
 
 
 
@@ -620,7 +627,7 @@ def process_draft_pool(draft):
 # We go trough each draft
 # For each pick, we go through the pool
 # If the card is in the pool, we count it
-def parse_pool_info(drafts):
+def parse_pool_info(drafts, cards):
     filename = os.path.join(os.path.dirname(__file__),
                             "..",
                             "data",
@@ -650,6 +657,7 @@ def parse_pool_info(drafts):
         if i % 10000 == 0:
             print(f"Processing draft {i}")
         process_draft_pool(draft)
+
 
     print(f"Time to parse pool info: {time.time() - timestamp}")
 
@@ -821,7 +829,7 @@ def create_exog(picked,
 
     # Constant term
     exog = np.ones((len(picked), 1))
-    labels = ["Constant"]
+    labels = [f"{card1_name} Baseline"]
 
     if pick_number:
         exog = np.column_stack((exog, pick_number_list))
@@ -1038,7 +1046,7 @@ def regress_on_all_cards(card1, cards, regr_params={}):
         exog = np.column_stack((exog, picked))
 
     if regr_params['check_card1_colour']:
-        openness = [pick.colourInPool[card1_colour] if card1_colour in pick.colourInPool else 0 for pick in card1_obj.picks]
+        openness = [pick.openness[card1_colour] for pick in card1_obj.picks]
         exog = np.column_stack((exog, openness))
         labels.append(f"Openness to {card1_colour}")
 
@@ -1086,7 +1094,8 @@ def regress_on_all_cards(card1, cards, regr_params={}):
 # Filter by number of some key card in the pool
 def elasticity_substitution(card1,
                             subs_list,
-                            regr_params
+                            regr_params,
+                            card1_picks=None
                             ):
 
     debug = False
@@ -1120,6 +1129,8 @@ def elasticity_substitution(card1,
     card1_obj = name_to_card(card1)
     card1_colour = card1_obj.colour
     card1_num = cardNumsHash[card1]
+    if card1_picks is None:
+        card1_picks = [picks[pick_id] for pick_id in card1_obj.picks]
 
     # Case where there is only one substitute
     card2 = subs_list[0]
@@ -1131,8 +1142,8 @@ def elasticity_substitution(card1,
     if card1_colour == card2_colour:
         check_card2_colour = False
 
-    if check_card1_colour and check_card2_colour:
-        debug = True
+    #if check_card1_colour and check_card2_colour:
+    #    debug = True
 
     # This is our dependent variable
     # 1 if card1 was picked, 0 otherwise
@@ -1158,29 +1169,29 @@ def elasticity_substitution(card1,
         num_substitutes[i] = []
 
     if len(card1_obj.picked) == 0:
-        picked = [1 if pick.pick == card1_num else 0 for pick in card1_obj.picks]
+        picked = [1 if pick.pick == card1_num else 0 for pick in card1_picks]
         card1_obj.picked = picked
         card_data[card1] = card1_obj
     else:
         picked = card1_obj.picked
 
     if check_card1_in_pool:
-        card1_in_pool = [x.numCardInPool[card1] if card1 in x.numCardInPool else 0 for x in card1_obj.picks]
+        card1_in_pool = [x.numCardInPool[card1] if card1 in x.numCardInPool else 0 for x in card1_picks]
 
     if not simple:
-        for pick in card1_obj.picks:
-            num_substitutes = count_substitutes(pick,
-                                                subs_list,
-                                                num_substitutes,
-                                                card1)
-
-        # Eliminate values that didn't have enough observations
-        num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
+        if card1_obj.num_sub_in_pool and card2 in card1_obj.num_sub_in_pool:
+            num_substitutes = card1_obj.num_sub_in_pool[card2]
+        else:
+            for i in range(1, NUM_MULTIPLES + 1):
+                num_substitutes[i] = [1 if pick.numCardInPool[card2] == i
+                                    else 0 for pick in card1_picks]
+            num_substitutes, num_obs = eliminate_low_observations(num_substitutes)
+            card1_obj.num_sub_in_pool[card2] = num_substitutes
 
     if card2 in card1_obj.num_sub_in_pool:
         simple_num_substitutes = card1_obj.num_sub_in_pool[card2]
     else:
-        simple_num_substitutes = [pick.numCardInPool[card2] if card2 in pick.numCardInPool else 0 for pick in card1_obj.picks]
+        simple_num_substitutes = [pick.numCardInPool[card2] if card2 in pick.numCardInPool else 0 for pick in card1_picks]
         card1_obj.num_sub_in_pool[card2] = simple_num_substitutes
         card_data[card1] = card1_obj
 
@@ -1193,27 +1204,61 @@ def elasticity_substitution(card1,
             card_data[card1] = card1_obj
 
     if check_card1_colour:
-        card1_colour_count = [x.openness_to_colour[card1_colour] for x in card1_obj.picks]
+        card1_colour_count = [x.openness_to_colour[card1_colour] for x in card1_picks]
 
-
-    # Do the same for card2
     if check_card2_colour:
-
-        # replace card2_colour_count with openness to colour2
-        card2_colour_count = [x.openness_to_colour[card2_colour] for x in card1_obj.picks]
+        card2_colour_count = [x.openness_to_colour[card2_colour] for x in card1_picks]
 
     # Create the pick_number array
     pick_number_list = []
 
     #pick_number_list = [15 * x['pack_number'] + x['pick_number'] + 1 for x in card1_obj.picks]
-    pick_number_list = [x.pick_number + 1 for x in card1_obj.picks]
+    pick_number_list = [x.pick_number + 1 for x in card1_picks]
 
     # Create a variable that represents the number of times you are seeing the card this pack
     if times_seen:
-        times_seen = [0 if x.pick_number < 8 else 1 for x in card1_obj.picks]
+        times_seen = [0 if x.pick_number < 8 else 1 for x in card1_picks]
+
+    if debug:
+        # Check all the regr_params
+        # if something is true, but its list is empty
+        # that's an error
+        if check_card1_in_pool and len(card1_in_pool) == 0:
+            print("ERROR: check_card1_in_pool is true but card1_in_pool is empty")
+            exit(1)
+
+        if check_card1_colour and len(card1_colour_count) == 0:
+            print("ERROR: check_card1_colour is true but card1_colour_count is empty")
+            exit(1)
+
+        if check_card2_colour and len(card2_colour_count) == 0:
+            print("ERROR: check_card2_colour is true but card2_colour_count is empty")
+            exit(1)
+
+        if pick_number and len(pick_number_list) == 0:
+            print("ERROR: pick_number is true but pick_number_list is empty")
+            exit(1)
+
+        if times_seen and len(times_seen) == 0:
+            print("ERROR: times_seen is true but times_seen is empty")
+            exit(1)
+
+        if simple and len(simple_num_substitutes) == 0:
+            print("ERROR: simple is true but simple_num_substitutes is empty")
+            exit(1)
+
+        # There shouldn't be empty lists in num_substitutes
+        # If there are, that's an error
+        if not simple:
+            for i in num_substitutes.keys():
+                if len(num_substitutes[i]) == 0:
+                    print(f"ERROR: num_substitutes[{i}] is empty")
+                    exit(1)
 
     # Create the matrices for the regression
     if not simple:
+
+        logify = False
 
         if debug:
             for i in range(1, len(num_substitutes.keys())):
@@ -1237,10 +1282,6 @@ def elasticity_substitution(card1,
                                 card1,
                                 logify)
 
-        if times_seen:
-            exog = np.column_stack((exog, times_seen))
-            labels.append("Times seen")
-
         # Create the model
         model = sm.OLS(endog, exog)
 
@@ -1251,94 +1292,112 @@ def elasticity_substitution(card1,
         # get the t value for each number of substitutes parameter
         # if it is not significant at the 5% level, eliminate it
         # if it is significant, keep it
-        temp = {}
-        for i in range(1, len(num_substitutes.keys())):
-            t = results.tvalues[i+1]
-            if t > 1.96 or t < -1.96:
-                temp[i] = num_substitutes[i]
+        t_test = True
+        if t_test:
+            temp = {}
+            for i in range(1, len(num_substitutes.keys())):
+                t = results.tvalues[i+1]
+                if t > 1.96 or t < -1.96:
+                    temp[i] = num_substitutes[i]
 
-        num_substitutes = temp
+            num_substitutes = temp
 
-        # rerun the regression
-        endog = np.array(picked)
 
-        exog, labels = create_exog(picked,
-                                num_substitutes,
-                                check_card1_in_pool,
-                                card1_in_pool,
-                                check_card1_colour,
-                                card1_colour_count,
-                                check_card2_colour,
-                                card2_colour_count,
-                                pick_number,
-                                pick_number_list,
-                                subs_list,
-                                card1_colour,
-                                card2_colour,
-                                card1,
-                                logify)
+            # rerun the regression
+            # with only the significant parameters
+            endog = np.array(picked)
 
-        model = sm.OLS(endog, exog)
+            exog, labels = create_exog(picked,
+                                    num_substitutes,
+                                    check_card1_in_pool,
+                                    card1_in_pool,
+                                    check_card1_colour,
+                                    card1_colour_count,
+                                    check_card2_colour,
+                                    card2_colour_count,
+                                    pick_number,
+                                    pick_number_list,
+                                    subs_list,
+                                    card1_colour,
+                                    card2_colour,
+                                    card1,
+                                    logify)
 
-        model.exog_names[:] = labels
+            model = sm.OLS(endog, exog)
 
-        results = model.fit()
+            model.exog_names[:] = labels
 
-        substitutes, elasticity = check_if_substitutes(results,
-                                                    num_observations,
-                                                    weight_by_num_obs=True,
-                                                    eliminate_zero_coef=True,
-                                                    labels=labels)
-        
+            results = model.fit()
+
         # Get the coefficients
         num_quants = len(num_substitutes.keys())
         coeffs = []
 
-        for i in range(num_quants):
-            coeffs.append(results.params[i+2])
+        # Find the labels that are num sub in pool
+        for i in range(len(labels)):
+            if f"{card2} in pool" in labels[i]:
+                coeffs.append(results.params[i])
 
-            print(f"{labels[i+2]} coefficient: {results.params[i+2]}")
+        # If there's only one significant coefficient
+        # return zero
+        # TODO: test this with returning coeffs[0]
+        # but my intuition is that it's too high
+        if len(coeffs) < 2:
+            print(coeffs)
+            print(f"Only one significant coefficient for {card1} and {subs_list}")
+            # return coeffs[0]
+            return 0
 
         plt.plot(range(num_quants), coeffs)
         plt.xlabel("Number of substitutes")
         plt.ylabel("Coefficient")
         plt.title(f"Coefficients for {card1} and {subs_list}")
 
-        # draw a line of best fit
-        # this is the elasticity of substitution
-        x = range(num_quants)
-        y = coeffs
-
         # Do a polyfit
         # Try degree 1, 2
         # If degree 2 is better, use that
         # Otherwise use degree 1
+        x = range(num_quants)
+        y = coeffs
         z = np.polyfit(x, y, 1)
+        elasticity = z[0]
         f = np.poly1d(z)
 
         # calculate new x's and y's
         x_new = np.linspace(0, num_quants, 50)
         y_new = f(x_new)
 
-        # save the plot to file
-        plt.plot(x_new, y_new)
-        plt.plot(x,y,'o', x_new, y_new)
+        # plot the coefficients and the line of best fit
+        plt.plot(x, y, 'o', x_new, y_new)
+
+        # x axis lables should start at 1
+        plt.xticks(range(1, num_quants + 1))
+
         suffix = suffix_params(regr_params)
-        plt.savefig(f"plots/{card1}_{card2}_coeffs_{suffix}.png")
-        
+
+        # Save the plot
+        escaped_card1_name = card1.replace(" ", "_")
+        escaped_card2_name = card2.replace(" ", "_")
+
+        #plt.savefig(f"../plots/elasticity_{escaped_card1_name}_{escaped_card2_name}_{suffix}.png")
 
         if debug:
             print(results.summary())
-            if substitutes:
+
+            print('polyfit')
+            print(f"y = {z[0]} * x + {z[1]}")
+
+            if elasticity < 0:
                 print(f"{card1} and {subs_list} are substitutes")
             else:
                 print(f"{card1} and {subs_list} are not substitutes")
 
             print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
-            print('coefficients from polyfit')
+        # Clear the plot
+        plt.clf()
 
-        return z[0]
+        return elasticity
 
     # ==================================================
     # Simple model
@@ -1486,12 +1545,12 @@ def regress_alsa(cards, availabilities):
         simple_regression_data.append([card,
                                 gih_winrate,
                                 alsa])
-        
+
     # Create the simple data frame
     simple_df = pd.DataFrame(simple_regression_data, columns=["card_name",
                                                 "gih_winrate",
                                                 "alsa"])
-    
+
     # Run the simple regression
     # The model is:
     # alsa = b0 + b1 * gih_winrate
@@ -1924,9 +1983,6 @@ def test_subs_card_type(cards_with_subs):
 
 
 
-
-
-
 # Get all the substitutes for a list of cards
 # Takes a list of cards
 # Returns {
@@ -1936,7 +1992,7 @@ def test_subs_card_type(cards_with_subs):
 def get_substitutes(cards,
                     regr_params,
                     refresh=False) -> tuple:
-    
+
     print("Getting substitutes for a list of cards")
 
     cards_with_subs = {}
@@ -1957,6 +2013,7 @@ def get_substitutes(cards,
     if refresh:
         if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", subs_filename)):
             os.remove(os.path.join(os.path.dirname(__file__), "..", "data", subs_filename))
+            os.remove(os.path.join(os.path.dirname(__file__), "..", "data", comps_filename))
 
     # If both files exist, load them
     if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", subs_filename)) and os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", comps_filename)):
@@ -2012,9 +2069,34 @@ def get_substitutes(cards,
     print(f"Computing substitutes for regression parameters: {regr_params}")
     # Compute the elasticity of substitution for each pair of cards
     for card1 in cards:
+        card1_obj = name_to_card(card1)
+        card1_obj.num_sub_in_pool = {}
         print("Getting substututes for " + card1)
         print(f"Card is number {cards.index(card1) + 1} out of {len(cards)}")
         print(f"Estimated time remaining: {np.mean(completion_times) * (len(cards) - cards.index(card1))} seconds")
+
+        card1_picks = [picks[pick_id] for pick_id in card1_obj.picks]
+
+        # Calculate num_sub_in pool
+        if not card1_obj.num_sub_in_pool:
+            for card2 in cards:
+                card1_obj.num_sub_in_pool[card2] = {}
+                for i in range(1, NUM_MULTIPLES):
+                    card1_obj.num_sub_in_pool[card2][i] = []
+
+            for pick in card1_picks:
+                for pick_card in pick.numCardInPool.keys():
+                    if pick_card not in cards:
+                        continue
+                    for i in range(1, NUM_MULTIPLES):
+                        if pick.numCardInPool[pick_card] == i:
+                            card1_obj.num_sub_in_pool[pick_card][i].append(1)
+                        else:
+                            card1_obj.num_sub_in_pool[pick_card][i].append(0)
+
+            card1_obj.num_sub_in_pool[card2], __ = eliminate_low_observations(card1_obj.num_sub_in_pool[card2])
+
+        card_data[card1] = card1_obj
 
         start_time = time.time()
         for card2 in cards:
@@ -2023,7 +2105,8 @@ def get_substitutes(cards,
                 # pass in the regr_params as boolean vars
                 elasticity = elasticity_substitution(card1,
                                                      card2,
-                                                     regr_params)
+                                                     regr_params,
+                                                     card1_picks)
 
                 cards_with_elasticities[card1, card2] = elasticity
 
@@ -2038,23 +2121,14 @@ def get_substitutes(cards,
             if card1 != card2:
                 elasticity1 = cards_with_elasticities[card1, card2]
                 elasticity2 = cards_with_elasticities[card2, card1]
-                if elasticity1 >= 0:
+                if elasticity1 > 0:
                     # Append to complements
                     cards_with_comps[card1].append((card2, elasticity1))
-                    continue
-
-                if symmetrical_subs and elasticity2 >= 0:
-                    continue
-
-                # WINTRATE_DIFFERENCE_THRESHOLD = 0.05
-
-                chosen_elasticity = elasticity1
-
-                # Ignore the substitutes if the elasticity is too high
-                if chosen_elasticity > ELASTICITY_THRESHOLD:
-                    continue
-
-                cards_with_subs[card1].append((card2, chosen_elasticity))
+                elif symmetrical_subs and elasticity2 >= 0:
+                    print('skipping due to asymmetry')
+                else:
+                    # Append to substitutes
+                    cards_with_subs[card1].append((card2, elasticity1))
 
     # Cache the cards with their substitutes
     with open(os.path.join(os.path.dirname(__file__), "..", "data", subs_filename), "wb") as f:
@@ -2433,7 +2507,7 @@ def test_model_versions():
         'pairwise': True
     }
 
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=True)
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
 
     regr_params['debug'] = False
 
@@ -2637,6 +2711,8 @@ card_data = getCardData()
 
 cards, pairs = get_pairs(colours, rares=False)
 
+# read and print substitutes_pairwise_colour1_colour2.pickle
+
 # If there's already card_data with stats
 # don't need to parse_drafts at all
 if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle")):
@@ -2661,7 +2737,7 @@ else:
 
     # Go through the drafts,
     # Appending the information we need for the regression to each card
-    parse_pool_info(drafts)
+    parse_pool_info(drafts, cards)
 
     delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
 
@@ -2689,6 +2765,14 @@ for card in card_data.values():
     if card.manaValue is None:
         card.manaValue = 0
 
+
+# Go through picks
+# Add a 0 for each card not in the pool
+print("adding zeroes to picks")
+for pick_id in picks.keys():
+    for card in cards:
+        if card not in picks[pick_id].numCardInPool:
+            picks[pick_id].numCardInPool[card] = 0
 
 test_model_versions()
 
