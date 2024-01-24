@@ -606,7 +606,7 @@ def process_draft_pool(draft):
         pick.openness_to_colour["BR"] = np.mean([pick.openness_to_colour["B"], pick.openness_to_colour["R"]])
 
         # delete pick.numCardInPool
-        del pick.numCardInPool
+        #del pick.numCardInPool
 
         # Generate a unique id for the pick
         pick.id = GLOBAL_PICK_ID
