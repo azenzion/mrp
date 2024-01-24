@@ -28,6 +28,8 @@ debug = False
 NUM_DRAFTS = 162153
 #NUM_DRAFTS = 10000
 
+GLOBAL_PICK_ID = 1
+
 # The number of multiples in the pool to consider
 # This just needs to be larger than we're likely to see
 # in the data
@@ -602,12 +604,16 @@ def process_draft_pool(draft):
         # Calculate openness to BR
         pick.openness_to_colour["BR"] = np.mean([pick.openness_to_colour["B"], pick.openness_to_colour["R"]])
 
+        # delete pick.numCardInPool
+        del pick.numCardInPool
+
         # Generate a unique id for the pick
-        pick.id = f"{pick.draft_id}_{pick.pick_number}_{pick.pick}"
+        pick.id = GLOBAL_PICK_ID
         picks[pick.id] = pick
+        GLOBAL_PICK_ID += 1
 
         # Add the regr_info to every card in the pack
-        # Every card should contain all picks involving that card
+        # Every card should contain the id of all picks involving that card
         for card_num in pick.pack_cards:
             card_name = cardNamesHash[card_num]
             card = card_data[card_name]
@@ -2086,8 +2092,12 @@ def get_substitutes(cards,
 
             for pick in card1_picks:
                 for pick_card in pick.numCardInPool.keys():
+                    # If card is not in the data set, dont care
                     if pick_card not in cards:
                         continue
+                    # If card is not in the pool, don't 
+                    if pick_card not in pick.numCardInPool:
+                        card1_obj.num_sub_in_pool[pick_card][i].append(0)
                     for i in range(1, NUM_MULTIPLES):
                         if pick.numCardInPool[pick_card] == i:
                             card1_obj.num_sub_in_pool[pick_card][i].append(1)
@@ -2096,7 +2106,7 @@ def get_substitutes(cards,
 
             card1_obj.num_sub_in_pool[card2], __ = eliminate_low_observations(card1_obj.num_sub_in_pool[card2])
 
-        card_data[card1] = card1_obj
+            card_data[card1] = card1_obj
 
         start_time = time.time()
         for card2 in cards:
@@ -2733,13 +2743,16 @@ else:
 
     print("There are this many drafts in the data set: " + str(len(drafts)))
 
-    filtered_drafts = colour_pair_filter(drafts, colours)
+    #filtered_drafts = colour_pair_filter(drafts, colours)
 
     # Go through the drafts,
     # Appending the information we need for the regression to each card
     parse_pool_info(drafts, cards)
 
     delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
+
+    # dont need drafts any more
+    drafts = []
 
 print("This many pairs of cards: " + str(len(pairs)))
 
@@ -2764,15 +2777,6 @@ with open(os.path.join(os.path.dirname(__file__), "mana_values.csv"), "r") as f:
 for card in card_data.values():
     if card.manaValue is None:
         card.manaValue = 0
-
-
-# Go through picks
-# Add a 0 for each card not in the pool
-print("adding zeroes to picks")
-for pick_id in picks.keys():
-    for card in cards:
-        if card not in picks[pick_id].numCardInPool:
-            picks[pick_id].numCardInPool[card] = 0
 
 test_model_versions()
 
