@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 from helper import Draft, Pick, Card
+import random
 
 DRAFTS_CSV_PATH = os.path.join(os.path.dirname(__file__),
                              "..",
@@ -24,8 +25,8 @@ CARDNAMES_TXT_PATH = os.path.join(os.path.dirname(__file__),
 
 debug = False
 
-NUM_DRAFTS = 162153
-#NUM_DRAFTS = 10000
+#NUM_DRAFTS = 162153
+NUM_DRAFTS = 1000
 
 # The number of multiples in the pool to consider
 # This just needs to be larger than we're likely to see
@@ -589,8 +590,8 @@ def process_draft_pool(draft):
         dict_increment(colour_in_draft_pool, pool_card_colour)
 
         # Add the pool cards to pick.numCardInPool
-        pick.numCardInPool = num_card_in_draft_pool
-        pick.colourInPool = colour_in_draft_pool
+        pick.numCardInPool = num_card_in_draft_pool.copy()
+        pick.colourInPool = colour_in_draft_pool.copy()
 
         pick.openness_to_colour = {}
         colours = ["W", "U", "B", "R", "G",]
@@ -1125,6 +1126,14 @@ def elasticity_substitution(card1,
     card2_obj = name_to_card(subs_list[0])
     card2_colour = card2_obj.colour
 
+    # if card1 and card2 are the same colour
+    # don't check card2 colour
+    if card1_colour == card2_colour:
+        check_card2_colour = False
+
+    if check_card1_colour and check_card2_colour:
+        debug = True
+
     # This is our dependent variable
     # 1 if card1 was picked, 0 otherwise
     picked = []
@@ -1168,17 +1177,17 @@ def elasticity_substitution(card1,
         # Eliminate values that didn't have enough observations
         num_substitutes, num_observations = eliminate_low_observations(num_substitutes)
 
-    try:
+    if card2 in card1_obj.num_sub_in_pool:
         simple_num_substitutes = card1_obj.num_sub_in_pool[card2]
-    except KeyError:
+    else:
         simple_num_substitutes = [pick.numCardInPool[card2] if card2 in pick.numCardInPool else 0 for pick in card1_obj.picks]
         card1_obj.num_sub_in_pool[card2] = simple_num_substitutes
         card_data[card1] = card1_obj
 
     if logify:
-        try:
+        if card2 in card1_obj.logified_num_in_pool:
             simple_num_substitutes = card1_obj.logified_num_in_pool[card2]
-        except KeyError:
+        else:
             simple_num_substitutes = [np.log(x + 1) for x in simple_num_substitutes]
             card1_obj.logified_num_in_pool[card2] = simple_num_substitutes
             card_data[card1] = card1_obj
@@ -1239,11 +1248,84 @@ def elasticity_substitution(card1,
 
         results = model.fit()
 
+        # get the t value for each number of substitutes parameter
+        # if it is not significant at the 5% level, eliminate it
+        # if it is significant, keep it
+        temp = {}
+        for i in range(1, len(num_substitutes.keys())):
+            t = results.tvalues[i+1]
+            if t > 1.96 or t < -1.96:
+                temp[i] = num_substitutes[i]
+
+        num_substitutes = temp
+
+        # rerun the regression
+        endog = np.array(picked)
+
+        exog, labels = create_exog(picked,
+                                num_substitutes,
+                                check_card1_in_pool,
+                                card1_in_pool,
+                                check_card1_colour,
+                                card1_colour_count,
+                                check_card2_colour,
+                                card2_colour_count,
+                                pick_number,
+                                pick_number_list,
+                                subs_list,
+                                card1_colour,
+                                card2_colour,
+                                card1,
+                                logify)
+
+        model = sm.OLS(endog, exog)
+
+        model.exog_names[:] = labels
+
+        results = model.fit()
+
         substitutes, elasticity = check_if_substitutes(results,
                                                     num_observations,
                                                     weight_by_num_obs=True,
                                                     eliminate_zero_coef=True,
                                                     labels=labels)
+        
+        # Get the coefficients
+        num_quants = len(num_substitutes.keys())
+        coeffs = []
+
+        for i in range(num_quants):
+            coeffs.append(results.params[i+2])
+
+            print(f"{labels[i+2]} coefficient: {results.params[i+2]}")
+
+        plt.plot(range(num_quants), coeffs)
+        plt.xlabel("Number of substitutes")
+        plt.ylabel("Coefficient")
+        plt.title(f"Coefficients for {card1} and {subs_list}")
+
+        # draw a line of best fit
+        # this is the elasticity of substitution
+        x = range(num_quants)
+        y = coeffs
+
+        # Do a polyfit
+        # Try degree 1, 2
+        # If degree 2 is better, use that
+        # Otherwise use degree 1
+        z = np.polyfit(x, y, 1)
+        f = np.poly1d(z)
+
+        # calculate new x's and y's
+        x_new = np.linspace(0, num_quants, 50)
+        y_new = f(x_new)
+
+        # save the plot to file
+        plt.plot(x_new, y_new)
+        plt.plot(x,y,'o', x_new, y_new)
+        suffix = suffix_params(regr_params)
+        plt.savefig(f"plots/{card1}_{card2}_coeffs_{suffix}.png")
+        
 
         if debug:
             print(results.summary())
@@ -1254,8 +1336,14 @@ def elasticity_substitution(card1,
 
             print(f"Elasticity of substitution for {card1} and {subs_list}: {elasticity}")
 
+            print('coefficients from polyfit')
+
+        return z[0]
+
+    # ==================================================
     # Simple model
-    # Continuous on number of cards in pool
+    # ==================================================
+
     if simple:
 
         endog = picked
@@ -1775,23 +1863,19 @@ def test_subs_colour(cards_with_subs,
         # Get the average intercolour distance for substitutes
         # and complements
 
+        colour_distances_card = []
         sub_distance = 0
+        colour = name_to_card(card).colour
         for sub in sorted_subs:
             sub_colour = name_to_card(sub[0]).colour
-            if sub_colour != name_to_card(card).colour:
-                break
-            sub_distance += 1
+            if sub_colour != colour:
+                colour_distances_card.append(sub_distance)
+                sub_distance = 0
+                colour = sub_colour
+            else:
+                sub_distance += 1
 
-        avg_intercolour_subs.append(sub_distance)
-
-        comp_distance = 0
-        for comp in sorted_comps:
-            comp_colour = name_to_card(comp[0]).colour
-            if comp_colour != name_to_card(card).colour:
-                break
-            comp_distance += 1
-
-        avg_intercolour_comps.append(comp_distance)
+        avg_intercolour_subs.append(np.mean(colour_distances_card))
 
     # Print the average intercolour distance for substitutes and complements
     print(f"Average intercolour distance for substitutes: {np.mean(avg_intercolour_subs)}")
@@ -2291,98 +2375,6 @@ def suffix_to_regr_params(suffix):
     return regr_params
 
 
-def test_model_versions():
-    bools = [True, False]
-
-    runs = []
-    # This is our current best candidate model
-    # pairwise, colour1, log
-    regr_params = {
-        'check_card1_colour': True,
-        'check_card2_colour': False,
-        'check_card1_in_pool': False,
-        'logify': True,
-        'pick_number': False,
-        "symmetrical_subs": True,
-        "debug": False,
-        "simple": True,
-        'times_seen': False,
-        'pairwise': True
-    }
-
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
-
-    suffix = suffix_params(regr_params)
-    mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-    type_similarity = test_subs_card_type(cards_with_subs)
-    colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-
-    runs.append((mv_delta, type_similarity, colour_distance, suffix))
-    # Sort the runs by delta
-    runs.sort(key=lambda x: x[0])
-
-    # Do a run of pairwise with no colour1
-    # no log
-    regr_params['logify'] = False
-    regr_params['check_card1_colour'] = False
-
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
-    suffix = suffix_params(regr_params)
-    mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-    type_similarity = test_subs_card_type(cards_with_subs)
-    colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-    runs.append((mv_delta, type_similarity, colour_distance, suffix))
-
-    # Log, still no colour1
-    regr_params['logify'] = True
-
-    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
-    suffix = suffix_params(regr_params)
-    mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-    type_similarity = test_subs_card_type(cards_with_subs)
-    colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-    runs.append((mv_delta, type_similarity, colour_distance, suffix))
-
-    # Restore colour1
-    regr_params['check_card1_colour'] = True
-    # Try with and without symmetrical subs
-    for sym in bools:
-        regr_params['symmetrical_subs'] = sym
-
-        cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
-        suffix = suffix_params(regr_params)
-        mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-        type_similarity = test_subs_card_type(cards_with_subs)
-        colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-        runs.append((mv_delta, type_similarity, colour_distance, suffix))
-
-    # combinatorially check the rest if we have extra time
-    for parameter in regr_params.keys():
-        if parameter == 'debug':
-            continue
-        for bool in bools:
-            regr_params[f"{parameter}"] = bool
-            suffix = suffix_params(regr_params)
-
-            print(f"Testing model: {suffix}")
-
-            cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
-
-            mv_delta = test_subs_mana_value(cards_with_subs, cards_with_comps)
-            type_similarity = test_subs_card_type(cards_with_subs)
-            colour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
-
-            runs.append((mv_delta, type_similarity, colour_distance, suffix))
-
-    # Sort the runs by delta
-    runs.sort(key=lambda x: x[0])
-
-    # Pretty Print the runs as a markdown table
-    print("| Mana Value Delta | Type Similarity | Colour Distance | Parameters |")
-    for run in runs:
-        print(f"| {run[0]} | {run[1]} | {run[2]} | {run[3]} |")
-
-
 
 
 def suffix_params(regr_params):
@@ -2422,6 +2414,61 @@ def suffix_params(regr_params):
 
     return filename
 
+def test_model_versions():
+    bools = [True, False]
+
+    runs = []
+    # This is our current best candidate model
+    # pairwise, colour1, log
+    regr_params = {
+        'check_card1_colour': True,
+        'check_card2_colour': True,
+        'check_card1_in_pool': False,
+        'logify': False,
+        'pick_number': False,
+        "symmetrical_subs": False,
+        "debug": False,
+        "simple": False,
+        'times_seen': False,
+        'pairwise': True
+    }
+
+    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=True)
+
+    regr_params['debug'] = False
+
+    for sym in bools:
+        for simple in bools:
+            for logify in bools:
+                for check_card1_in_pool in bools:
+
+                    regr_params['symmetrical_subs'] = sym
+                    regr_params['simple'] = simple
+                    regr_params['logify'] = logify
+                    regr_params['check_card1_in_pool'] = check_card1_in_pool
+
+                    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
+                    suffix = suffix_params(regr_params)
+                    runs.append((cards_with_subs, cards_with_comps, suffix))
+
+    # Test all the runs
+    runs_with_results = []
+    for run in runs:
+        delta_mv = test_subs_mana_value(run[0], run[1])
+        intercolour_distance = test_subs_colour(run[0], run[1])
+        cardtype = test_subs_card_type(run[0], run[1])
+
+        runs_with_results.append((delta_mv, intercolour_distance, cardtype, run[2]))
+
+
+    # Sort the runs by delta
+    runs.sort(key=lambda x: x[0])
+
+    # Pretty Print the runs as a markdown table
+    print("| Mana Value Delta | Type Similarity | Colour Distance | Parameters |")
+    for run in runs:
+        print(f"| {run[0]} | {run[1]} | {run[2]} | {run[3]} |")
+
 
 
 def generate_subs_groupings(cards,
@@ -2453,6 +2500,113 @@ def print_inversion_pairs(inversion_pairs):
     for pair, pair_info in sorted_inversion_pairs:
         card1, card2 = get_cards_from_pair(pair)
         print(f"{card1.name} and {card2.name}: {pair_info['inversion']}")
+
+def plot_openness(draft):
+
+    # sort the picks by number
+    draft.picks.sort(key=lambda x: x.pick_number + 15 * x.pack_number)
+
+    all_colours = get_colours()
+
+    colourInPool = {}
+    numCardInPool = {}
+
+    # do numColourInPool for each pick
+    for pick in draft.picks:
+        pick_name = cardNamesHash[pick.pick]
+        dict_increment(numCardInPool, pick_name)
+        pool_card_colour = name_to_colour(pick_name)
+        dict_increment(colourInPool, pool_card_colour)
+        # Add the pool cards to pick.numCardInPool
+        pick.numCardInPool = numCardInPool.copy()
+        pick.colourInPool = colourInPool.copy()
+
+
+    # For each pick in the draft
+    # Calculate the openness to each colour
+    main_colours = ['W', 'U', 'B', 'R', 'G']
+
+    for pick in draft.picks:
+        openness = {}
+        for colour in main_colours:
+            openness[colour] = calculate_openness_to_colour(colour, pick)
+
+        pick.openness = openness
+
+        # Print the openness to each colour
+        print(f"Pick {pick.pick_number} Pack {pick.pack_number}")
+        for colour in main_colours:
+            print(f"{colour}: {openness[colour]}")
+
+        print("=========================")
+
+    # Graph them
+    # Do a line graph
+    # x axis is pick number
+    # y axis is openness to each colour
+    # 5 lines, one for each colour
+    # line is the same colour as the colour
+    # background of the graph is lilac
+    # each point on x axis is labeled with the card name picked
+    full_colour = {'W': 'white',
+                       'U': 'blue',
+                       'B': 'black',
+                       'R': 'red',
+                       'G': 'green'}
+    # Create the figure
+    fig = plt.figure(figsize=(12, 8))
+
+    # Create the axes
+    ax = fig.add_subplot(111)
+
+    # Set the background colour
+    ax.set_facecolor("#E6E6FA")
+
+    # Set the title
+    ax.set_title("Openness to each colour over the course of the draft")
+
+    # Set the x axis label
+    ax.set_xlabel("Pick number")
+
+    # Set the y axis label
+    ax.set_ylabel("Openness to each colour")
+
+    # Set the x axis ticks
+    ax.set_xticks(range(len(draft.picks)))
+
+    # Set the y axis ticks
+    # Openness ranges from 0 to 1
+    ax.set_yticks(np.arange(0, 1.1, 0.1))
+
+    # Set the x axis tick labels
+    # Should be card names
+    # write them vertically
+    ax.set_xticklabels([cardNamesHash[pick.pick] for pick in draft.picks], rotation=90)
+
+    # Set the x axis limits
+    ax.set_xlim(0, len(draft.picks))
+
+    # Set the y axis limits
+    ax.set_ylim(0, 1)
+
+    # Plot the openness to each colour
+    for colour in main_colours:
+        # Get the openness to the colour
+        openness = [pick.openness[colour] for pick in draft.picks]
+
+        # Plot the openness
+        
+        ax.plot(range(len(draft.picks)), openness, color=full_colour[colour], label=colour)
+
+    # Show the plot
+    plt.show()
+
+
+
+
+
+
+
 
 # Print inverted pairs and exit
 
@@ -2537,6 +2691,32 @@ for card in card_data.values():
 
 
 test_model_versions()
+
+exit()
+
+# Regress smite the deathless on improvised club
+regr_params = {
+    'check_card1_colour': True,
+    'check_card2_colour': True,
+    'check_card1_in_pool': False,
+    'logify': True,
+    'pick_number': False,
+    "symmetrical_subs": False,
+    "debug": True,
+    "simple": False,
+    'times_seen': False,
+    'pairwise': True
+}
+
+elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
+
+# contrast with something that should be complements
+elasticity_substitution("Smite the Deathless", "Relentless Rohirrim", regr_params)
+
+elasticity_substitution("Improvised Club", "Smite the Deathless", regr_params)
+
+elasticity_substitution("Mirkwood Bats", "Gríma Wormtongue", regr_params)
+
 exit()
 
 # Print the largest substution effects
