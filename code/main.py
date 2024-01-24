@@ -430,7 +430,7 @@ def find_inversion_pairs(pairs,
         more_picked_card_name = more_picked_card.name
         less_picked_card_name = higher_winrate_card.name
 
-        # Store the pair and the pick rates
+        # Store the pair and the pick rates 
         inversion_pairs[(more_picked_card_name, less_picked_card_name)] = {"higher_pickrate": higher_pickrate,
             "lower_pickrate": lower_pickrate,
             "higher_winrate": higher_winrate,
@@ -568,6 +568,7 @@ def dict_increment(dictionary, key):
 
 
 def process_draft_pool(draft):
+    global GLOBAL_PICK_ID
 
     # Sort the picks by modified pick number
     # This is the pick number + 15 * pack number + 1
@@ -585,7 +586,7 @@ def process_draft_pool(draft):
         pick_name = cardNamesHash[pick.pick]
 
         # Log card
-        dict_increment(num_card_in_draft_pool, pick_name)
+        dict_increment(num_card_in_draft_pool, pick.pick)
 
         pool_card_colour = name_to_colour(pick_name)
 
