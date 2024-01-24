@@ -586,7 +586,7 @@ def process_draft_pool(draft):
         pick_name = cardNamesHash[pick.pick]
 
         # Log card
-        dict_increment(num_card_in_draft_pool, pick.pick)
+        dict_increment(num_card_in_draft_pool, pick_name)
 
         pool_card_colour = name_to_colour(pick_name)
 
