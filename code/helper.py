@@ -12,6 +12,8 @@ class Pick:
 
     def __init__(self):
 
+        self.id = ""
+
         self.draft_id = 0
         self.pack_number = 0
         self.pick_number = 0
