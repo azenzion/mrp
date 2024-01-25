@@ -672,6 +672,9 @@ def parse_pool_info(drafts, cards):
     with open(filename, "wb") as f:
         pickle.dump(card_data, f)
 
+    # cache picks
+    filename = "picks_with_pool.pickle"
+
 
 def compareSubstitutes(card1, card2, cardList):
 
@@ -2779,16 +2782,12 @@ for card in card_data.values():
     if card.manaValue is None:
         card.manaValue = 0
 
-test_model_versions()
-
-exit()
-
 # Regress smite the deathless on improvised club
 regr_params = {
     'check_card1_colour': True,
     'check_card2_colour': True,
     'check_card1_in_pool': False,
-    'logify': True,
+    'logify': False,
     'pick_number': False,
     "symmetrical_subs": False,
     "debug": True,
@@ -2798,6 +2797,8 @@ regr_params = {
 }
 
 elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
+
+exit()
 
 # contrast with something that should be complements
 elasticity_substitution("Smite the Deathless", "Relentless Rohirrim", regr_params)
