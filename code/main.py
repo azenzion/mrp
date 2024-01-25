@@ -34,7 +34,7 @@ GLOBAL_PICK_ID = 1
 # This just needs to be larger than we're likely to see
 # in the data
 # In practice this is like, 4 or 5 at most
-NUM_MULTIPLES = 10
+NUM_MULTIPLES = 6
 
 # For a number x
 # If there are less drafts than this with x of card2 in pool
@@ -605,9 +605,6 @@ def process_draft_pool(draft):
         # Calculate openness to BR
         pick.openness_to_colour["BR"] = np.mean([pick.openness_to_colour["B"], pick.openness_to_colour["R"]])
 
-        # delete pick.numCardInPool
-        #del pick.numCardInPool
-
         # Generate a unique id for the pick
         pick.id = GLOBAL_PICK_ID
         picks[pick.id] = pick
@@ -673,65 +670,12 @@ def parse_pool_info(drafts, cards):
         pickle.dump(card_data, f)
 
     # cache picks
-    filename = "picks_with_pool.pickle"
-
-
-def compareSubstitutes(card1, card2, cardList):
-
-    # Compute the substitutes for a card within a list of cards
-    # hang on to the complements even though we don't use them at the moment
-    card1Subs, card1Comps = findTopSubstitutes(card1, cards)
-    card2Subs, card2Comps = findTopSubstitutes(card2, cards)
-
-    # print the total number of substitutes for each
-    print(f"Number of substitutes for card1: {len(card1Subs)}")
-    print(f"Number of substitutes for card2: {len(card2Subs)}")
-
-    # card1Subs = [x for x in rallySubs if x[1] < -0.005]
-    # card2Subs = [x for x in smiteSubs if x[1] < -0.005]
-
-    # Print the number of substitutes after eliminating
-    print(f"Number of substitutes for {card1} after eliminating: {len(card1Subs)}")
-    print(f"Number of substitutes for {card2} after eliminating: {len(card2Subs)}")
-
-    print("=====================================")
-
-    # Print each substitute and its elasticity
-    print("{card1} substitutes")
-    for substitute in card1Subs:
-        print(f"{substitute[0]}: {substitute[1]}")
-
-    print("=====================================")
-    print("{card2} substitutes")
-    for substitute in card2Subs:
-        print(f"{substitute[0]}: {substitute[1]}")
-
-    print("=====================================")
-    print("Total observations of substitutes")
-
-    card1SubsCount = 0 
-    card1SubsWeighted = 0
-    for card1Sub in card2Subs:
-        card1SubName = card1Sub[0]
-        card1SubElas = card1Sub[1]
-
-        card1SubsCount += card_data[card1SubName].numberSeen
-        card1SubsWeighted += card_data[card1SubName].numberSeen * card1SubElas
-
-    card2SubsCount = 0
-    card2SubsWeighted = 0
-    for card2Sub in card2Subs:
-        card2SubName = card2Sub[0]
-        card2SubElas = card2Sub[1]
-
-        card2SubsCount += card_data[card2SubName].numberSeen
-        card2SubsWeighted += card_data[card2SubName].numberSeen * card2SubElas
-
-    print(f"Number of times you see {card1} substitutes: {card1SubsCount}")
-    print(f"Number of times you see {card2} substitutes: {card2SubsCount}")
-
-    print(f"Weighted number of times you see {card1} substitutes: {card1SubsWeighted}")
-    print(f"Weighted number of times you see {card2} substitutes: {card2SubsWeighted}")
+    with open(os.path.join(os.path.dirname(__file__),
+                            "..",
+                            "data",
+                            "picks.pickle"),
+                  "wb") as f:
+          pickle.dump(picks, f)
 
 
 # num_obs is a dictionary where keys i are number of card2
@@ -1142,6 +1086,10 @@ def elasticity_substitution(card1,
     if card1_picks is None:
         card1_picks = [picks[pick_id] for pick_id in card1_obj.picks]
 
+    # Print the number of picks
+    if debug:
+        print(f"Number of picks containing {card1}: {len(card1_picks)}")
+
     # Case where there is only one substitute
     card2 = subs_list[0]
     card2_obj = name_to_card(subs_list[0])
@@ -1190,13 +1138,22 @@ def elasticity_substitution(card1,
 
     if not simple:
         if card1_obj.num_sub_in_pool and card2 in card1_obj.num_sub_in_pool:
+            if debug:
+                print(f"Using cached num_substitutes for {card1} and {card2}")
+                print(f"Number of picks according to cache: {len(card1_obj.num_sub_in_pool[card2][1])}")
+
             num_substitutes = card1_obj.num_sub_in_pool[card2]
         else:
             for i in range(1, NUM_MULTIPLES + 1):
-                num_substitutes[i] = [1 if pick.numCardInPool[card2] == i
+                num_substitutes[i] = [1 if (card2 in pick.numCardInPool and pick.numCardInPool[card2] == i)
                                     else 0 for pick in card1_picks]
             num_substitutes, num_obs = eliminate_low_observations(num_substitutes)
             card1_obj.num_sub_in_pool[card2] = num_substitutes
+
+    # Print the length of each list
+    for i in range(1, len(num_substitutes.keys())):
+        if debug:
+            print(f"{len(num_substitutes[i])} observations with {i} {card2} in pool")
 
     if card2 in card1_obj.num_sub_in_pool:
         simple_num_substitutes = card1_obj.num_sub_in_pool[card2]
@@ -1388,8 +1345,11 @@ def elasticity_substitution(card1,
         # Save the plot
         escaped_card1_name = card1.replace(" ", "_")
         escaped_card2_name = card2.replace(" ", "_")
+        # Make sure the file exists
+        if not os.path.exists("./plots"):
+            os.makedirs("./plots")
 
-        #plt.savefig(f"../plots/elasticity_{escaped_card1_name}_{escaped_card2_name}_{suffix}.png")
+        plt.savefig(f"./plots/elasticity_{escaped_card1_name}_{escaped_card2_name}_{suffix}.png")
 
         if debug:
             print(results.summary())
@@ -1527,7 +1487,6 @@ def regress_alsa(cards, availabilities):
         card_obj = name_to_card(card)
         try:
             availability_score = availabilities[card]
-            #number_substitutes = np.log(availability_score + 1)
             number_substitutes = availability_score
         except AttributeError as e:
             print(f"Card {card} does not have a number of substitutes")
@@ -1568,7 +1527,7 @@ def regress_alsa(cards, availabilities):
     # Create the model
     simple_model = sm.OLS.from_formula("alsa ~ gih_winrate",
                                 data=simple_df)
-    
+
     # Fit the model
     simple_results = simple_model.fit()
 
@@ -2005,6 +1964,8 @@ def get_substitutes(cards,
 
     print("Getting substitutes for a list of cards")
 
+    debug = regr_params['debug']
+
     cards_with_subs = {}
     cards_with_comps = {}
     for card in cards:
@@ -2083,9 +2044,13 @@ def get_substitutes(cards,
         card1_obj.num_sub_in_pool = {}
         print("Getting substututes for " + card1)
         print(f"Card is number {cards.index(card1) + 1} out of {len(cards)}")
-        print(f"Estimated time remaining: {np.mean(completion_times) * (len(cards) - cards.index(card1))} seconds")
+        print(f"Estimated time remaining: {(np.mean(completion_times) * (len(cards) - cards.index(card1))) / 60} minutes")
 
         card1_picks = [picks[pick_id] for pick_id in card1_obj.picks]
+
+        # Print number of picks
+        if debug:
+            print(f"Number of picks containing {card1}: {len(card1_picks)}")
 
         # Calculate num_sub_in pool
         if not card1_obj.num_sub_in_pool:
@@ -2095,16 +2060,26 @@ def get_substitutes(cards,
                     card1_obj.num_sub_in_pool[card2][i] = []
 
             for pick in card1_picks:
+
+                # If card is not in pool, append 0
+                not_in_pool = set(cards) - set(pick.numCardInPool.keys())
+                for card in not_in_pool:
+                    for i in range(1, NUM_MULTIPLES):
+                        card1_obj.num_sub_in_pool[card][i].append(0)
+
                 for pick_card in pick.numCardInPool.keys():
                     # If card is not in the data set, dont care
                     if pick_card not in cards:
                         continue
-                    # If card is not in the pool, don't 
-                    if pick_card not in pick.numCardInPool:
-                        card1_obj.num_sub_in_pool[pick_card][i].append(0)
+
+                    # Create all the dummy variables for the card
                     for i in range(1, NUM_MULTIPLES):
+                        # If there are i copies of the card in the pool, dummy var is 1
                         if pick.numCardInPool[pick_card] == i:
                             card1_obj.num_sub_in_pool[pick_card][i].append(1)
+                        # Otherwise, card is in pool, but
+                        # number is not i
+                        # So dummy var is 0
                         else:
                             card1_obj.num_sub_in_pool[pick_card][i].append(0)
 
@@ -2734,6 +2709,8 @@ if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "card_da
     start_time = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     print(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle"))
     card_data = pickle.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle"), "rb"))
+    picks = pickle.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "picks.pickle"), "rb"))
+
 
     delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
     print(f"Time to load card_data_with_stats.pickle: {delta_time}")
@@ -2789,8 +2766,8 @@ regr_params = {
     'check_card1_in_pool': False,
     'logify': False,
     'pick_number': False,
-    "symmetrical_subs": False,
-    "debug": True,
+    "symmetrical_subs": True,
+    "debug": False,
     "simple": False,
     'times_seen': False,
     'pairwise': True
@@ -2798,16 +2775,28 @@ regr_params = {
 
 elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
 
-exit()
+cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
 
-# contrast with something that should be complements
-elasticity_substitution("Smite the Deathless", "Relentless Rohirrim", regr_params)
+# do the tests
+delta_mv = test_subs_mana_value(cards_with_subs, cards_with_comps)
+intercolour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+cardtype = test_subs_card_type(cards_with_subs)
 
-elasticity_substitution("Improvised Club", "Smite the Deathless", regr_params)
+# Print the results
+print(f"Delta MV: {delta_mv}")
+print(f"Intercolor distance: {intercolour_distance}")
+print(f"Card type: {cardtype}")
 
-elasticity_substitution("Mirkwood Bats", "Gríma Wormtongue", regr_params)
-
-exit()
+# For each card, print its top 5 substitutes and complements
+for card in cards_with_subs.keys():
+    print(f"Card: {card}")
+    print("Substitutes")
+    for sub in cards_with_subs[card][:5]:
+        print(f"{sub[0]}: {sub[1]}")
+    print("Complements")
+    for comp in cards_with_comps[card][:5]:
+        print(f"{comp[0]}: {comp[1]}")
+    print("=======================")
 
 # Print the largest substution effects
 # And the larges complement effects
@@ -2855,7 +2844,6 @@ for i in range(1, 11):
     availability = sorted_availabilities[i - 1]
     print(f"{availability[0]}: {availability[1]}")
 
-exit()
 
 regress_alsa(cards, availabilities)
 
