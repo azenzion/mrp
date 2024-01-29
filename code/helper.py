@@ -64,6 +64,8 @@ class Card:
         self.manaValue = 0
         self.cardType = ""
 
+        self.availability_score = 0.0
+
         self.substitutes = []
         self.timesSeen = 0
         self.timesPicked = 0

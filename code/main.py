@@ -162,56 +162,6 @@ def parse_percentage(percentage):
             return float(percentage[:-1])
 
 
-def compute_pairwise_pickrate(drafts, card1, card2):
-    # Look for drafts where a player chose between card1 and card2
-    choice_count = 0
-    card1_count = 0
-    card2_count = 0
-
-    # Get the set number of each card
-    # This is how the cards are stored as a memory optimization
-    card1_num = cardNumsHash[card1]
-    card2_num = cardNumsHash[card2]
-
-    # Create the list of all picks
-    all_picks = []
-    for draft in drafts:
-        all_picks.extend(draft.picks)
-
-    # picks
-    for pick in all_picks:
-        if card1_num in pick.pack_cards and card2_num in pick.pack_cards:
-
-            # Check if the player picked one of the two cards
-            if pick.pick == card1_num or pick.pick == card2_num:
-                choice_count += 1
-
-            # Check whether they picked card1 or card2
-            if pick.pick == card1_num:
-                card1_count += 1
-            elif pick.pick == card2_num:
-                card2_count += 1
-
-    # If there are no picks with the choice, return 0
-    if choice_count == 0:
-        return 0, 0
-
-    if debug:
-        # Print the number of drafts with the choice
-        print(f"Number of picks with the choice: {choice_count}")
-
-        print(f"Number of times they picked {card1}: {card1_count}")
-        print(f"Number of times they picked {card2}: {card2_count}")
-
-        # Print percentage players chose each card
-        print(f"Percentage of times they picked {card1}:'")
-        print(f"{card1_count / choice_count}")
-        print(f"Percentage of times they picked {card2}:'")
-        print(f"{card2_count / choice_count}")
-
-    return card1_count / choice_count, card2_count / choice_count
-
-
 def parse_drafts(csv_file_path, ltr_cards, numDrafts):
     drafts = []
 
@@ -355,18 +305,7 @@ def find_inversion_pairs(pairs,
                          ) -> dict:
     print("Finding inversion pairs")
 
-    # If there is a local cache, use it
-    if os.path.exists(os.path.join(os.path.dirname(__file__),
-                                    "..",
-                                    "data",
-                                    "inversion_pairs.pickle")):
-        print("Found local cache of inversion pairs")
-        with open(os.path.join(os.path.dirname(__file__),
-                               "..",
-                               "data",
-                               "inversion_pairs.pickle"),
-                  "rb") as f:
-                return pickle.load(f)
+    print(f"Number of pairs: {len(pairs.keys())}")
 
     inversion_pairs = {}
 
@@ -379,11 +318,13 @@ def find_inversion_pairs(pairs,
         card1_name = card1.name
         card2_name = card2.name
 
+        debug = True
+
         if debug:
             print(f"Computing inversion for {card1_name} and {card2_name}")
 
-        card1_pickrate = pairs[pair][0]
-        card2_pickrate = pairs[pair][1]
+        card1_pickrate = pairs[pair]['card1_pickrate']
+        card2_pickrate = pairs[pair]['card2_pickrate']
 
         if debug:
             print(f"{card1_name} pickrate: {card1_pickrate}")
@@ -711,7 +652,7 @@ def check_if_substitutes(results,
 # compute the rate at which card 1 was picked
 # and the rate at which card 2 was picked
 # should sum to 1
-def compute_pairwise_pickrates(pairs, drafts):
+def compute_pairwise_pickrates(cards):
     print("Computing pairwise pickrates")
 
     # If there is a local cache, use it
@@ -725,13 +666,64 @@ def compute_pairwise_pickrates(pairs, drafts):
                                "data",
                                "pairwise_pickrates.pickle"),
                   "rb") as f:
+
+            print("Loading pairwise pickrates from local cache")
             return pickle.load(f)
 
     pairs_with_pickrates = {}
-    # Compute the pairwise pick rate for each pair
-    for card1, card2 in pairs:
-        pickrate = compute_pairwise_pickrate(drafts, card1, card2)
-        pairs_with_pickrates[card1, card2] = pickrate
+
+    # Go through each pick
+    # For each pick, make all pairs with the pick
+    # Store the pairs in a dictionary
+    # Keys are pairs
+    # Values are the number of times the pair was seen
+    # and the number of times each card in the pair was picked
+    for i, pick in enumerate(picks.values()):
+
+        # Print every 100000 picks
+        if i % 100000 == 0:
+            print(f"Processing pick {i}")
+            print(f'size of pairs_with_pickrates: {len(pairs_with_pickrates.keys())}')
+
+        pick_name = cardNamesHash[pick.pick]
+
+        if pick_name not in cards:
+            continue
+        pick_pairs = []
+
+        # make all pairs with the pick
+        for pack_card in pick.pack_cards:
+
+            pack_card_name = cardNamesHash[pack_card]
+
+            if pack_card_name not in cards:
+                continue
+            if pack_card_name == pick_name:
+                continue
+            # store the pair alphabetically
+            # this is to avoid duplicates
+            pick_pairs.append(tuple(sorted([pick_name, pack_card_name])))
+
+        for pair in pick_pairs:
+            if pair not in pairs_with_pickrates:
+                pairs_with_pickrates[pair] = {
+                    'seen': 0,
+                    'card1_picked': 0,
+                    'card2_picked': 0,
+                }
+            else:
+                pairs_with_pickrates[pair]['seen'] += 1
+                pair_card1 = pair[0]
+                pair_card2 = pair[1]
+                if pair_card1 == pick_name:
+                    pairs_with_pickrates[pair]['card1_picked'] += 1
+                else:
+                    pairs_with_pickrates[pair]['card2_picked'] += 1
+
+    # Compute the pickrates
+    for pair in pairs_with_pickrates.keys():
+        pairs_with_pickrates[pair]['card1_pickrate'] = pairs_with_pickrates[pair]['card1_picked'] / pairs_with_pickrates[pair]['seen']
+        pairs_with_pickrates[pair]['card2_pickrate'] = pairs_with_pickrates[pair]['card2_picked'] / pairs_with_pickrates[pair]['seen']
 
     # Save the results to a local cache
     with open(os.path.join(os.path.dirname(__file__),
@@ -740,6 +732,8 @@ def compute_pairwise_pickrates(pairs, drafts):
                            "pairwise_pickrates.pickle"),
               "wb") as f:
         pickle.dump(pairs_with_pickrates, f)
+
+    print(f"Number of pairs with pickrates: {len(pairs_with_pickrates.keys())}")
 
     return pairs_with_pickrates
 
@@ -865,13 +859,13 @@ def eliminate_low_observations(num_substitutes):
 def calculate_openness_to_colour(colour1,
                                  pick):
 
+    BASELINE_OPENNESS = 0.5
+
     # If the card is BR, return the average of openness to B and openness to R
     if colour1 == "BR":
         return (calculate_openness_to_colour("B", pick) + calculate_openness_to_colour("R", pick)) / 2
 
     colour_in_pool = pick.colourInPool
-    pick_number = pick.pick_number
-    pack_number = pick.pack_number
 
     # ignore colourless card
     if '' in colour_in_pool:
@@ -879,10 +873,9 @@ def calculate_openness_to_colour(colour1,
 
     # Calculate openness to colour1
     cards_in_pool = sum(colour_in_pool.values())
+    # P1P1 half open to every colour
     if cards_in_pool == 0:
-        return 1
-
-    total_picks = pick_number + 1 + 15 * pack_number
+        return BASELINE_OPENNESS
 
     colourshares = {
         'W': 0,
@@ -908,6 +901,13 @@ def calculate_openness_to_colour(colour1,
         colourshares[colour] = colour_counts[colour] / cards_in_pool
 
     sorted_shares = sorted(colourshares.items(), key=lambda x: x[1], reverse=True)
+
+    # If there's only one colour in the pool
+    # Return the baseline
+    # As you are open to a second colour
+    nonzero_colours = [colour for colour in colourshares.keys() if colourshares[colour] > 0]
+    if len(nonzero_colours) == 1:
+        return BASELINE_OPENNESS
 
     top_colour = sorted_shares[0][0]
     second_colour = sorted_shares[1][0]
@@ -1068,6 +1068,10 @@ def elasticity_substitution(card1,
     check_card2_colour = regr_params['check_card2_colour']
     check_card1_in_pool = regr_params['check_card1_in_pool']
     pick_number = regr_params['pick_number']
+    if 'no_t_test' in regr_params and regr_params['no_t_test']:
+        t_test = False
+    else:
+        t_test = True
 
     # If card1 is passed in the list of substitutes, remove it
     # This is because we *always* use number of card1 already in pool
@@ -1259,7 +1263,6 @@ def elasticity_substitution(card1,
         # get the t value for each number of substitutes parameter
         # if it is not significant at the 5% level, eliminate it
         # if it is significant, keep it
-        t_test = True
         if t_test:
             temp = {}
             for i in range(1, len(num_substitutes.keys())):
@@ -1534,22 +1537,21 @@ def regress_alsa(cards, availabilities):
     # Print the results
     print(simple_results.summary())
 
-
-    # Create the data frame
+    # Create the data frame for the multiple regression
     df = pd.DataFrame(regression_data, columns=["card_name",
-                                                "number_substitutes",
+                                                "availability_score",
                                                 "gih_winrate",
                                                 "alsa"])
 
     # Run the regression
     # The model is:
-    # pickrate = b0 + b1 * number_substitutes + b2 * gih_winrate
+    # pickrate = b0 + b1 * availability_score + b2 * gih_winrate
     # The null hypothesis is that b1 = 0
     # The alternative hypothesis is that b1 < 0
     # This is a one-sided test
 
     # Create the model
-    model = sm.OLS.from_formula("alsa ~ number_substitutes + gih_winrate",
+    model = sm.OLS.from_formula("alsa ~ availability_score + gih_winrate",
                                 data=df)
 
     # Fit the model
@@ -1561,17 +1563,24 @@ def regress_alsa(cards, availabilities):
     # Graph the results
     # Plot the residuals
     fig = plt.figure(figsize=(12, 8))
-    fig = sm.graphics.plot_regress_exog(results, "number_substitutes", fig=fig)
+    fig = sm.graphics.plot_regress_exog(results, "availability_score", fig=fig)
+
+    # Save the graph
+
+    plt.savefig("./plots/alsa_regr_availability_score.png")
 
     # Show the graph
-    plt.show()
+    # plt.show()
 
     # Plot the residuals
     fig = plt.figure(figsize=(12, 8))
     fig = sm.graphics.plot_regress_exog(results, "gih_winrate", fig=fig)
 
     # Show the graph
-    plt.show()
+    # plt.show()
+
+    # Save the graph
+    plt.savefig("./plots/alsa_regr_gih_winrate.png")
 
 
 def is_substitute_for(card,
@@ -2145,7 +2154,7 @@ def get_substitutes(cards,
 # The second card is the less picked card
 # The third element is the difference in pick rate between the two cards
 # The fourth element is the difference in substitutes seen between the cards
-def regress_inversion_pairs(inversion_pairs):
+def regress_inversion_pairs(inversion_pairs, cards_with_subs):
     print("Regressing pick rate difference on substitutes seen difference")
 
     dependent_var = "Pickrate Difference (Card 1 - Card 2)"
@@ -2165,8 +2174,8 @@ def regress_inversion_pairs(inversion_pairs):
         inversion = inversion_pairs[pair]["inversion"]
 
         # Count the total number of observations of the substitutes
-        card1_subs_count = card_data[card1].numberSubstitutes
-        card2_subs_count = card_data[card2].numberSubstitutes
+        card1_subs_count = len(cards_with_subs[card1])
+        card2_subs_count = len(cards_with_subs[card2])
 
         # At this point, card1 is the more picked card
         # because of how find_inversion_pairs works
@@ -2302,12 +2311,15 @@ def log_availabilities(availabilities, cards_with_subs, regr_params):
             f.write(f"availability score: {availability}\n")
             f.write("-----------------------------\n")
 
-            # Sort the substitutes by elasticity ascending
+            # Sort the substitutes by elasticity ascending  
             cards_with_subs[card].sort(key=lambda x: x[1])
 
             # Print each substitute and its elasticity
             for substitute in cards_with_subs[card]:
+                # get the times seen of the card
+                times_seen = card_data[substitute[0]].numberSeen
                 f.write(f"{substitute[0]}: {substitute[1]}\n")
+                f.write(f"\tcontributing: {substitute[1]} * {times_seen} = {abs(substitute[1] * times_seen)}\n")
 
             f.write("=============================\n")
 
@@ -2438,8 +2450,6 @@ def suffix_to_regr_params(suffix):
     return regr_params
 
 
-
-
 def suffix_params(regr_params):
     filename = ""
 
@@ -2474,6 +2484,9 @@ def suffix_params(regr_params):
     # colour pair filter
     if 'colour_pair_filter' in regr_params and regr_params['colour_pair_filter']:
         filename += "_filter"
+
+    if 'no_t_test' in regr_params and regr_params['no_t_test']:
+        filename += "_no_t_test"
 
     return filename
 
@@ -2533,7 +2546,6 @@ def test_model_versions():
         print(f"| {run[0]} | {run[1]} | {run[2]} | {run[3]} |")
 
 
-
 def generate_subs_groupings(cards,
                             regr_params,
                             refresh):
@@ -2542,7 +2554,8 @@ def generate_subs_groupings(cards,
     print(suffix_params(regr_params))
 
     # Get the substitutes for each card
-    cards_with_subs, cards_with_comps = get_substitutes(cards, regr_params, refresh)
+    cards_with_subs, cards_with_comps = get_substitutes(cards, regr_params,
+                                                        refresh)
 
     # Compute the availability of each card
     availabilities = compute_availability(cards_with_subs, regr_params)
@@ -2564,8 +2577,8 @@ def print_inversion_pairs(inversion_pairs):
         card1, card2 = get_cards_from_pair(pair)
         print(f"{card1.name} and {card2.name}: {pair_info['inversion']}")
 
-def plot_openness(draft):
 
+def plot_openness(draft):
     # sort the picks by number
     draft.picks.sort(key=lambda x: x.pick_number + 15 * x.pack_number)
 
@@ -2675,7 +2688,6 @@ def plot_openness(draft):
 
 # Main script
 
-
 if __name__ != "__main__":
     exit()
 
@@ -2770,7 +2782,8 @@ regr_params = {
     "debug": False,
     "simple": False,
     'times_seen': False,
-    'pairwise': True
+    'pairwise': True,
+    #'no_t_test': True,
 }
 
 elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
@@ -2820,15 +2833,6 @@ for card in cards_with_comps.keys():
 
 complementations.sort(key=lambda x: x[2], reverse=True)
 
-# Eliminate any complement effects that are between a card and itself
-# This is to eliminate the effect of the constant
-#temp = []
-#for complementation in complementations:
-#    if complementation[0] != complementation[1]:
- #       temp.append(complementation)
-
-#complementations = temp
-
 print("Largest complement effects")
 for i in range(1, 11):
     complementation = complementations[i - 1]
@@ -2841,17 +2845,13 @@ sorted_availabilities = sorted(availabilities.items(),
 
 print("Largest availability scores")
 for i in range(1, 11):
-    availability = sorted_availabilities[i - 1]
+    availability = sorted_availabilities[i-1]
     print(f"{availability[0]}: {availability[1]}")
-
 
 regress_alsa(cards, availabilities)
 
-pairs = compute_pairwise_pickrates(pairs, drafts)
-
-
+pairs = compute_pairwise_pickrates(cards)
 inversion_pairs = find_inversion_pairs(pairs)
-
 print_inversion_pairs(inversion_pairs)
 
-regress_inversion_pairs(inversion_pairs)
+regress_inversion_pairs(inversion_pairs, cards_with_subs)
