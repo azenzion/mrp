@@ -683,7 +683,6 @@ def compute_pairwise_pickrates(cards):
         # Print every 100000 picks
         if i % 100000 == 0:
             print(f"Processing pick {i}")
-            print(f'size of pairs_with_pickrates: {len(pairs_with_pickrates.keys())}')
 
         pick_name = cardNamesHash[pick.pick]
 
@@ -1272,7 +1271,6 @@ def elasticity_substitution(card1,
 
             num_substitutes = temp
 
-
             # rerun the regression
             # with only the significant parameters
             endog = np.array(picked)
@@ -1312,10 +1310,11 @@ def elasticity_substitution(card1,
         # return zero
         # TODO: test this with returning coeffs[0]
         # but my intuition is that it's too high
-        if len(coeffs) < 2:
-            print(coeffs)
-            print(f"Only one significant coefficient for {card1} and {subs_list}")
-            # return coeffs[0]
+        if len(coeffs) == 1:
+            print(f"Only one significant coefficient for {card1} and {card2}:\n{coeffs[0]}")
+            return coeffs[0]
+        if len(coeffs) == 0:
+            print(f"No significant coefficients for {card1} and {subs_list}")
             return 0
 
         plt.plot(range(num_quants), coeffs)
@@ -1471,8 +1470,10 @@ def elasticity_substitution(card1,
 # Regress all cards ALSA on the number of subsitutes seen in the sample
 # and on their GIH winrate
 # Takes a list of cards
-def regress_alsa(cards, availabilities):
+def regress_alsa(cards, availabilities, regr_params):
     print("Regressing ALSA on number of substitutes and GIH winrate")
+
+    suffix = suffix_params(regr_params)
 
     # Make a data frame for the regression
     # Each row is a card
@@ -1567,8 +1568,7 @@ def regress_alsa(cards, availabilities):
 
     # Save the graph
 
-    plt.savefig("./plots/alsa_regr_availability_score.png")
-
+    plt.savefig(f"./plots/alsa_regr_availability_score_{suffix}.png")
     # Show the graph
     # plt.show()
 
@@ -1580,7 +1580,7 @@ def regress_alsa(cards, availabilities):
     # plt.show()
 
     # Save the graph
-    plt.savefig("./plots/alsa_regr_gih_winrate.png")
+    plt.savefig(f"./plots/alsa_regr_gih_winrate_{suffix}.png")
 
 
 def is_substitute_for(card,
@@ -2154,11 +2154,11 @@ def get_substitutes(cards,
 # The second card is the less picked card
 # The third element is the difference in pick rate between the two cards
 # The fourth element is the difference in substitutes seen between the cards
-def regress_inversion_pairs(inversion_pairs, cards_with_subs):
+def regress_inversion_pairs(inversion_pairs, availabilities, regr_params):
     print("Regressing pick rate difference on substitutes seen difference")
 
-    dependent_var = "Pickrate Difference (Card 1 - Card 2)"
-    independent_var = "Substitutes Seen Difference (Card 1 - Card 2)"
+    dependent_var = "Inversion Difference (Card 1 - Card 2)"
+    independent_var = "Availabilities Difference (Card 1 - Card 2)"
 
     regr_data = []
 
@@ -2173,22 +2173,18 @@ def regress_inversion_pairs(inversion_pairs, cards_with_subs):
         # Get the coefficient of inversion
         inversion = inversion_pairs[pair]["inversion"]
 
-        # Count the total number of observations of the substitutes
-        card1_subs_count = len(cards_with_subs[card1])
-        card2_subs_count = len(cards_with_subs[card2])
-
         # At this point, card1 is the more picked card
         # because of how find_inversion_pairs works
+        availabilities_card1 = availabilities[card1]
+        availabilities_card2 = availabilities[card2]
 
-        # We want the difference between substitutes seen 
-        # for the more picked card and the less picked card
-        subs_count_diff = card1_subs_count - card2_subs_count
+        availabilities_diff = availabilities_card1 - availabilities_card2
 
         # Append the tuple to the list
         regr_data.append((card1,
                           card2,
                           inversion,
-                          subs_count_diff))
+                          availabilities_diff))
 
     # Create a dataframe from the regression data
     df = pd.DataFrame(regr_data, columns=["Card 1",
@@ -2206,13 +2202,20 @@ def regress_inversion_pairs(inversion_pairs, cards_with_subs):
     # Print the results
     print(results.summary())
 
+    filename = f"inv_pair_{suffix_params(regr_params)}.png"
+
     # Graph the results
     fig = plt.figure(figsize=(12, 8))
     fig = sm.graphics.plot_partregress_grid(results, fig=fig)
-    fig.savefig(os.path.join(os.path.dirname(__file__), "..", "data", "regression.png"))
+    fig.savefig(os.path.join(os.path.dirname(__file__),
+                             "..",
+                             "data",
+                             "plots",
+                             filename))
 
     # Show the plot
-    plt.show()
+    if debug:
+        plt.show()
 
 
 def colour_pair_filter(drafts, colours):
@@ -2566,16 +2569,24 @@ def generate_subs_groupings(cards,
     return cards_with_subs, cards_with_comps, availabilities
 
 
-def print_inversion_pairs(inversion_pairs):
+def print_inversion_pairs(inversion_pairs, regr_params):
     print("Printing inversion pairs")
+    filename = f"inversion_pairs{suffix_params(regr_params)}.log"
 
     # Sort the inversion pairs by inversion
     sorted_inversion_pairs = sorted(inversion_pairs.items(), key=lambda x: x[1]["inversion"], reverse=True)
 
     # Print each pair and its inversion
-    for pair, pair_info in sorted_inversion_pairs:
-        card1, card2 = get_cards_from_pair(pair)
-        print(f"{card1.name} and {card2.name}: {pair_info['inversion']}")
+    with open(os.path.join(os.path.dirname(__file__), "..", "data", filename), "w") as f:
+        for pair, pair_info in sorted_inversion_pairs:
+            card1, card2 = get_cards_from_pair(pair)
+            f.write(f"{card1.name} &\n{card2.name}\n")
+            f.write(f"Card 1 Pick Rate: {pair_info['higher_pickrate']}\n")
+            f.write(f"Card 2 Pick Rate: {pair_info['lower_pickrate']}\n")
+            f.write(f"Card 1 Win Rate: {pair_info['lower_winrate']}\n")
+            f.write(f"Card 2 Win Rate: {pair_info['higher_winrate']}\n")
+
+            f.write(f"Inversion: {pair_info['inversion']}\n")
 
 
 def plot_openness(draft):
@@ -2675,7 +2686,8 @@ def plot_openness(draft):
         ax.plot(range(len(draft.picks)), openness, color=full_colour[colour], label=colour)
 
     # Show the plot
-    plt.show()
+    if debug:
+        plt.show()
 
 
 
@@ -2722,7 +2734,6 @@ if os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "card_da
     print(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle"))
     card_data = pickle.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "card_data_with_stats.pickle"), "rb"))
     picks = pickle.load(open(os.path.join(os.path.dirname(__file__), "..", "data", "picks.pickle"), "rb"))
-
 
     delta_time = datetime.datetime.now() - datetime.datetime.strptime(start_time, "%Y-%m-%d-%H-%M-%S")
     print(f"Time to load card_data_with_stats.pickle: {delta_time}")
@@ -2783,11 +2794,12 @@ regr_params = {
     "simple": False,
     'times_seen': False,
     'pairwise': True,
-    #'no_t_test': True,
+    'no_t_test': False,
 }
 
-elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
 
+elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
+###
 cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
 
 # do the tests
@@ -2848,10 +2860,14 @@ for i in range(1, 11):
     availability = sorted_availabilities[i-1]
     print(f"{availability[0]}: {availability[1]}")
 
-regress_alsa(cards, availabilities)
+regress_alsa(cards, availabilities, regr_params)
+
+# load in the availabilities from file
+with open(os.path.join(os.path.dirname(__file__), "..", "data", f"availabilities{suffix_params(regr_params)}.pickle"), "rb") as f:
+    availabilities = pickle.load(f)
 
 pairs = compute_pairwise_pickrates(cards)
 inversion_pairs = find_inversion_pairs(pairs)
-print_inversion_pairs(inversion_pairs)
+print_inversion_pairs(inversion_pairs, regr_params)
 
-regress_inversion_pairs(inversion_pairs, cards_with_subs)
+regress_inversion_pairs(inversion_pairs, availabilities, regr_params)
