@@ -1010,11 +1010,6 @@ def regress_on_all_cards(card1, cards, regr_params={}):
         exog = np.column_stack((exog, times_seen))
         labels.append("Times seen")
 
-    if regr_params['rarity']:
-        rarity = [1 if card.rarity == 'U' else 0 for card in cards]
-        exog = np.column_stack((exog, rarity))
-        labels.append("Rarity")
-
     # Run the regression
     results = sm.OLS(endog, exog).fit()
 
@@ -2822,7 +2817,6 @@ regr_params = {
     'times_seen': False,
     'pairwise': True,
     'no_t_test': False,
-    'rarity': True
 }
 
 ###
