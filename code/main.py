@@ -6,12 +6,10 @@ import time
 import pickle
 import numpy as np
 import statsmodels.api as sm
-import math
 import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 from helper import Draft, Pick, Card
-import random
 
 DRAFTS_CSV_PATH = os.path.join(os.path.dirname(__file__),
                              "..",
@@ -92,7 +90,6 @@ def get_colours():
     return colour_combinations
 
 COLOURS = get_colours()
-
 
 def get_drafts_from_cache():
     # Read in the draft data from the cache
@@ -1013,6 +1010,11 @@ def regress_on_all_cards(card1, cards, regr_params={}):
         exog = np.column_stack((exog, times_seen))
         labels.append("Times seen")
 
+    if regr_params['rarity']:
+        rarity = [1 if card.rarity == 'U' else 0 for card in cards]
+        exog = np.column_stack((exog, rarity))
+        labels.append("Rarity")
+
     # Run the regression
     results = sm.OLS(endog, exog).fit()
 
@@ -1475,6 +1477,20 @@ def regress_alsa(cards, availabilities, regr_params):
 
     suffix = suffix_params(regr_params)
 
+    # sort the cards by avaiability score
+    cards.sort(key=lambda x: availabilities[x])
+
+    # For each card,
+    # print it
+    # print it's availability and its ALSA
+    for card in cards:
+        card_obj = name_to_card(card)
+        availability_score = availabilities[card]
+        alsa = card_obj.alsa
+        print(f"Card: {card}")
+        print(f"Availability score: {availability_score}")
+        print(f"ALSA: {alsa}")
+
     # Make a data frame for the regression
     # Each row is a card
     # Each column is a variable
@@ -1499,10 +1515,20 @@ def regress_alsa(cards, availabilities, regr_params):
         gih_winrate = card_obj.gameInHandWinrate
         alsa = card_obj.alsa
 
+        # add a control
+        # indicator for rarity 
+        # 1 if uncommon, 0 if common
+        print(card_obj.rarity)
+        if card_obj.rarity == "U":
+            rarity = 1
+        elif card_obj.rarity == "C":
+            rarity = 0
+
         regression_data.append([card,
                                 number_substitutes,
                                 gih_winrate,
-                                alsa])
+                                alsa,
+                                rarity])
 
     # Sort on number of substitutes
     regression_data.sort(key=lambda x: x[1])
@@ -1542,7 +1568,8 @@ def regress_alsa(cards, availabilities, regr_params):
     df = pd.DataFrame(regression_data, columns=["card_name",
                                                 "availability_score",
                                                 "gih_winrate",
-                                                "alsa"])
+                                                "alsa",
+                                                "rarity"])
 
     # Run the regression
     # The model is:
@@ -1552,7 +1579,7 @@ def regress_alsa(cards, availabilities, regr_params):
     # This is a one-sided test
 
     # Create the model
-    model = sm.OLS.from_formula("alsa ~ availability_score + gih_winrate",
+    model = sm.OLS.from_formula("alsa ~ availability_score + gih_winrate + rarity",
                                 data=df)
 
     # Fit the model
@@ -1568,9 +1595,9 @@ def regress_alsa(cards, availabilities, regr_params):
 
     # Save the graph
 
-    plt.savefig(f"./plots/alsa_regr_availability_score_{suffix}.png")
+    plt.savefig(f"./plots/alsa_regr_availability_score_alaric.png")
     # Show the graph
-    # plt.show()
+    plt.show()
 
     # Plot the residuals
     fig = plt.figure(figsize=(12, 8))
@@ -1580,7 +1607,7 @@ def regress_alsa(cards, availabilities, regr_params):
     # plt.show()
 
     # Save the graph
-    plt.savefig(f"./plots/alsa_regr_gih_winrate_{suffix}.png")
+    plt.savefig(f"./plots/alsa_regr_gih_winrate_alaric.png")
 
 
 def is_substitute_for(card,
@@ -2512,8 +2539,6 @@ def test_model_versions():
 
     cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
 
-    regr_params['debug'] = False
-
     for sym in bools:
         for simple in bools:
             for logify in bools:
@@ -2524,7 +2549,9 @@ def test_model_versions():
                     regr_params['logify'] = logify
                     regr_params['check_card1_in_pool'] = check_card1_in_pool
 
-                    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
+                    cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards,
+                                                                                                regr_params,
+                                                                                                refresh=False)
                     suffix = suffix_params(regr_params)
                     runs.append((cards_with_subs, cards_with_comps, suffix))
 
@@ -2535,8 +2562,10 @@ def test_model_versions():
         intercolour_distance = test_subs_colour(run[0], run[1])
         cardtype = test_subs_card_type(run[0], run[1])
 
-        runs_with_results.append((delta_mv, intercolour_distance, cardtype, run[2]))
-
+        runs_with_results.append((delta_mv,
+                                  intercolour_distance,
+                                  cardtype, 
+                                  un[2]))
 
     # Sort the runs by delta
     runs.sort(key=lambda x: x[0])
@@ -2787,27 +2816,32 @@ regr_params = {
     'check_card1_in_pool': False,
     'logify': False,
     'pick_number': False,
-    "symmetrical_subs": False,
+    "symmetrical_subs": True,
     "debug": False,
     "simple": False,
     'times_seen': False,
     'pairwise': True,
     'no_t_test': False,
+    'rarity': True
 }
 
-
-elasticity_substitution("Smite the Deathless", "Improvised Club", regr_params)
 ###
-cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards, regr_params, refresh=False)
+cards_with_subs, cards_with_comps, availabilities = generate_subs_groupings(cards,
+                                                                            regr_params,
+                                                                            refresh=False)
 
 # do the tests
-delta_mv = test_subs_mana_value(cards_with_subs, cards_with_comps)
-intercolour_distance = test_subs_colour(cards_with_subs, cards_with_comps)
+delta_mv = test_subs_mana_value(cards_with_subs,
+                                cards_with_comps)
+
+intercolour_distance = test_subs_colour(cards_with_subs,
+                                        cards_with_comps)
+
 cardtype = test_subs_card_type(cards_with_subs)
 
 # Print the results
 print(f"Delta MV: {delta_mv}")
-print(f"Intercolor distance: {intercolour_distance}")
+print(f"Intercolour distance: {intercolour_distance}")
 print(f"Card type: {cardtype}")
 
 # For each card, print its top 5 substitutes and complements
@@ -2822,8 +2856,7 @@ for card in cards_with_subs.keys():
     print("=======================")
 
 # Print the largest substution effects
-# And the larges complement effects
-
+# And the largest complement effects
 substitutions = []
 for card in cards_with_subs.keys():
     for sub, elasticity in cards_with_subs[card]:
@@ -2859,6 +2892,8 @@ for i in range(1, 11):
     print(f"{availability[0]}: {availability[1]}")
 
 regress_alsa(cards, availabilities, regr_params)
+
+exit()
 
 # load in the availabilities from file
 with open(os.path.join(os.path.dirname(__file__), "..", "data", f"availabilities{suffix_params(regr_params)}.pickle"), "rb") as f:
