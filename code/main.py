@@ -2093,20 +2093,18 @@ def get_substitutes(cards,
                             card1_obj.num_sub_in_pool[pick_card][i].append(0)
 
             card1_obj.num_sub_in_pool[card2], __ = eliminate_low_observations(card1_obj.num_sub_in_pool[card2])
-
+            # TODO: memory optimize this
             card_data[card1] = card1_obj
 
         start_time = time.time()
         for card2 in cards:
-            if card1 != card2:
+            # pass in the regr_params as boolean vars
+            elasticity = elasticity_substitution(card1,
+                                                    card2,
+                                                    regr_params,
+                                                    card1_picks)
 
-                # pass in the regr_params as boolean vars
-                elasticity = elasticity_substitution(card1,
-                                                     card2,
-                                                     regr_params,
-                                                     card1_picks)
-
-                cards_with_elasticities[card1, card2] = elasticity
+            cards_with_elasticities[card1, card2] = elasticity
 
         completion_times.append(time.time() - start_time)
 
@@ -2789,7 +2787,7 @@ regr_params = {
     'check_card1_in_pool': False,
     'logify': False,
     'pick_number': False,
-    "symmetrical_subs": True,
+    "symmetrical_subs": False,
     "debug": False,
     "simple": False,
     'times_seen': False,
